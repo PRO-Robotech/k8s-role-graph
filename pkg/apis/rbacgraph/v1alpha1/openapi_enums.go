@@ -1,0 +1,105 @@
+package v1alpha1
+
+import (
+	"k8s.io/kube-openapi/pkg/common"
+	"k8s.io/kube-openapi/pkg/validation/spec"
+)
+
+// GetEnumOpenAPIDefinitions returns OpenAPI definitions with enum constraints
+// for custom string types that openapi-gen does not handle automatically.
+func GetEnumOpenAPIDefinitions(_ common.ReferenceCallback) map[string]common.OpenAPIDefinition {
+	prefix := "k8s-role-graph/pkg/apis/rbacgraph/v1alpha1."
+	return map[string]common.OpenAPIDefinition{
+		prefix + "MatchMode": {
+			Schema: spec.Schema{
+				SchemaProps: spec.SchemaProps{
+					Description: "Match mode: 'any' (OR, default) or 'all' (AND).",
+					Type:        []string{"string"},
+					Enum:        []any{string(MatchModeAny), string(MatchModeAll)},
+				},
+			},
+		},
+		prefix + "PodPhaseMode": {
+			Schema: spec.Schema{
+				SchemaProps: spec.SchemaProps{
+					Description: "Filter pods by phase: 'active' (Pending/Running/Unknown, default), 'running', or 'all'.",
+					Type:        []string{"string"},
+					Enum:        []any{string(PodPhaseModeActive), string(PodPhaseModeRunning), string(PodPhaseModeAll)},
+				},
+			},
+		},
+		prefix + "GraphNodeType": {
+			Schema: spec.Schema{
+				SchemaProps: spec.SchemaProps{
+					Description: "Type of a node in the RBAC graph.",
+					Type:        []string{"string"},
+					Enum: []any{
+						string(GraphNodeTypeRole), string(GraphNodeTypeClusterRole),
+						string(GraphNodeTypeRoleBinding), string(GraphNodeTypeClusterRoleBinding),
+						string(GraphNodeTypeUser), string(GraphNodeTypeGroup), string(GraphNodeTypeServiceAccount),
+						string(GraphNodeTypePod), string(GraphNodeTypeWorkload),
+						string(GraphNodeTypePodOverflow), string(GraphNodeTypeWorkloadOverflow),
+					},
+				},
+			},
+		},
+		prefix + "GraphEdgeType": {
+			Schema: spec.Schema{
+				SchemaProps: spec.SchemaProps{
+					Description: "Type of an edge in the RBAC graph.",
+					Type:        []string{"string"},
+					Enum: []any{
+						string(GraphEdgeTypeAggregates), string(GraphEdgeTypeGrants),
+						string(GraphEdgeTypeSubjects), string(GraphEdgeTypeRunsAs), string(GraphEdgeTypeOwnedBy),
+					},
+				},
+			},
+		},
+	}
+}
+
+// GetOpenAPIDefinitionsWithEnums returns the generated OpenAPI definitions
+// merged with enum constraints for custom string types.
+func GetOpenAPIDefinitionsWithEnums(ref common.ReferenceCallback) map[string]common.OpenAPIDefinition {
+	defs := GetOpenAPIDefinitions(ref)
+	for key, value := range GetEnumOpenAPIDefinitions(ref) {
+		defs[key] = value
+	}
+	injectEnumsIntoStructFields(defs)
+	return defs
+}
+
+// injectEnumsIntoStructFields patches struct field schemas in-place so that
+// fields typed as MatchMode, PodPhaseMode, GraphNodeType, or GraphEdgeType
+// carry enum constraints in the parent struct schema.
+func injectEnumsIntoStructFields(defs map[string]common.OpenAPIDefinition) {
+	prefix := "k8s-role-graph/pkg/apis/rbacgraph/v1alpha1."
+
+	patchField := func(typeName, fieldName string, enum []any) {
+		def, ok := defs[prefix+typeName]
+		if !ok || def.Schema.Properties == nil {
+			return
+		}
+		prop, ok := def.Schema.Properties[fieldName]
+		if !ok {
+			return
+		}
+		prop.SchemaProps.Enum = enum
+		def.Schema.Properties[fieldName] = prop
+		defs[prefix+typeName] = def
+	}
+
+	patchField("RoleGraphReviewSpec", "matchMode", []any{string(MatchModeAny), string(MatchModeAll)})
+	patchField("RoleGraphReviewSpec", "podPhaseMode", []any{string(PodPhaseModeActive), string(PodPhaseModeRunning), string(PodPhaseModeAll)})
+	patchField("GraphNode", "type", []any{
+		string(GraphNodeTypeRole), string(GraphNodeTypeClusterRole),
+		string(GraphNodeTypeRoleBinding), string(GraphNodeTypeClusterRoleBinding),
+		string(GraphNodeTypeUser), string(GraphNodeTypeGroup), string(GraphNodeTypeServiceAccount),
+		string(GraphNodeTypePod), string(GraphNodeTypeWorkload),
+		string(GraphNodeTypePodOverflow), string(GraphNodeTypeWorkloadOverflow),
+	})
+	patchField("GraphEdge", "type", []any{
+		string(GraphEdgeTypeAggregates), string(GraphEdgeTypeGrants),
+		string(GraphEdgeTypeSubjects), string(GraphEdgeTypeRunsAs), string(GraphEdgeTypeOwnedBy),
+	})
+}

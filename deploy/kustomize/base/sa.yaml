@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: rbacgraph-apiserver
+  namespace: rbac-graph-system
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: rbacgraph-web
+  namespace: rbac-graph-system

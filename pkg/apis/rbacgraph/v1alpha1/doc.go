@@ -1,0 +1,6 @@
+// Package v1alpha1 is the v1alpha1 version of the rbacgraph API group.
+//
+// +k8s:deepcopy-gen=package
+// +k8s:openapi-gen=true
+// +groupName=rbacgraph.incloud.io
+package v1alpha1

@@ -1,0 +1,52 @@
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: rbacgraph-selfsigned-root
+spec:
+  selfSigned: {}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: rbacgraph-ca
+  namespace: rbac-graph-system
+spec:
+  isCA: true
+  commonName: rbacgraph-ca
+  secretName: rbacgraph-ca
+  duration: 2160h # 90d
+  renewBefore: 360h # 15d
+  issuerRef:
+    name: rbacgraph-selfsigned-root
+    kind: ClusterIssuer
+---
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: rbacgraph-ca-issuer
+  namespace: rbac-graph-system
+spec:
+  ca:
+    secretName: rbacgraph-ca
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: rbacgraph-serving-cert
+  namespace: rbac-graph-system
+spec:
+  secretName: rbacgraph-serving-tls
+  duration: 2160h # 90d
+  renewBefore: 360h # 15d
+  subject:
+    organizations:
+      - rbacgraph
+  commonName: rbacgraph-apiserver.rbac-graph-system.svc
+  dnsNames:
+    - rbacgraph-apiserver
+    - rbacgraph-apiserver.rbac-graph-system
+    - rbacgraph-apiserver.rbac-graph-system.svc
+    - rbacgraph-apiserver.rbac-graph-system.svc.cluster.local
+  issuerRef:
+    name: rbacgraph-ca-issuer
+    kind: Issuer
