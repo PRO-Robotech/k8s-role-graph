@@ -1,0 +1,19 @@
+{{- if .Values.server.enabled }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "k8s-role-graph.fullname" . }}-extension-apiserver-authentication-reader
+  namespace: kube-system
+  labels:
+    component.incloud.io/name: server
+    {{- include "k8s-role-graph.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: extension-apiserver-authentication-reader
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "k8s-role-graph.serverServiceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+{{- end }}
