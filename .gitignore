@@ -1,4 +1,4 @@
 .cache/
 *.test
-rbacgraph-apiserver
-rbacgraph-web
+/bin/
+.DS_Store
