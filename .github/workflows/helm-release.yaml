@@ -2,7 +2,6 @@ name: release
 on:
   push:
     branches:
-      - "*"
       - 'release/*'
       - 'feature/*'
       - 'hotfix/*'
