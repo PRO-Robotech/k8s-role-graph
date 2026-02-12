@@ -1,6 +1,8 @@
 .cache
 .git
-/rbacgraph-apiserver
-/rbacgraph-web
+rbacgraph-apiserver
+rbacgraph-web
+!cmd/rbacgraph-apiserver
+!cmd/rbacgraph-web
 *.tar
 *.tgz
