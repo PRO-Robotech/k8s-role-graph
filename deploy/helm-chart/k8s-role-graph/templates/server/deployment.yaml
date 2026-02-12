@@ -1,0 +1,100 @@
+{{- $server := .Values.server }}
+{{- if $server.enabled }}
+{{- $certSecretName := printf "%s-server" (include "k8s-role-graph.fullname" .) -}}
+{{- if eq .Values.internalTLS.certSource "secret" }}
+{{- $certSecretName = .Values.internalTLS.secret.server.secretName -}}
+{{- end }}
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "k8s-role-graph.fullname" . }}-server
+  labels:
+    component.incloud.io/name: server
+    {{- include "k8s-role-graph.labels" . | nindent 4 }}
+spec:
+  {{- if not $server.autoscaling.enabled }}
+  replicas: {{ $server.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      component.incloud.io/name: server
+      {{- include "k8s-role-graph.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with $server.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        component.incloud.io/name: server
+        {{- include "k8s-role-graph.labels" . | nindent 8 }}
+        {{- with $server.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with $server.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "k8s-role-graph.serverServiceAccountName" . }}
+      {{- with $server.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: {{ .Chart.Name }}-server
+          {{- with $server.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          image: "{{ $server.image.repository }}:{{ $server.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ $server.image.pullPolicy }}
+          args:
+            - --secure-port={{ $server.service.port }}
+            - --tls-cert-file=/certs/tls.crt
+            - --tls-private-key-file=/certs/tls.key
+          ports:
+            - name: https
+              containerPort: {{ $server.service.port }}
+              protocol: TCP
+          {{- with $server.livenessProbe }}
+          livenessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with $server.readinessProbe }}
+          readinessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with $server.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - mountPath: /certs
+              name: certificate
+          {{- with $server.volumeMounts }}
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      volumes:
+        - name: certificate
+          secret:
+            defaultMode: 420
+            secretName: {{ $certSecretName }}
+      {{- with $server.volumes }}
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $server.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $server.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $server.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

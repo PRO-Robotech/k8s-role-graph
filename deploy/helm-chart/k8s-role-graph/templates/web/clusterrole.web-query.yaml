@@ -1,0 +1,14 @@
+{{- if .Values.web.enabled }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "k8s-role-graph.fullname" . }}-web-query
+  labels:
+    component.incloud.io/name: web
+    {{- include "k8s-role-graph.labels" . | nindent 4 }}
+rules:
+  - apiGroups: ["rbacgraph.incloud.io"]
+    resources: ["rolegraphreviews"]
+    verbs: ["create"]
+{{- end }}

@@ -1,0 +1,18 @@
+{{- if .Values.server.enabled }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "k8s-role-graph.fullname" . }}-rbac-reader
+  labels:
+    component.incloud.io/name: server
+    {{- include "k8s-role-graph.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "k8s-role-graph.fullname" . }}-rbac-reader
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "k8s-role-graph.serverServiceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+{{- end }}

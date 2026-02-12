@@ -1,0 +1,22 @@
+{{- if .Values.server.enabled }}
+---
+apiVersion: apiregistration.k8s.io/v1
+kind: APIService
+metadata:
+  name: v1alpha1.rbacgraph.incloud.io
+  annotations:
+    cert-manager.io/inject-ca-from: {{ .Release.Namespace }}/rbacgraph-ca
+  labels:
+    component.incloud.io/name: server
+    {{- include "k8s-role-graph.labels" . | nindent 4 }}
+spec:
+  group: rbacgraph.incloud.io
+  version: v1alpha1
+  groupPriorityMinimum: 2000
+  versionPriority: 15
+  service:
+    name: {{ include "k8s-role-graph.fullname" . }}-server
+    namespace: {{ .Release.Namespace }}
+    port: {{ .Values.server.service.port }}
+  insecureSkipTLSVerify: false
+{{- end }}

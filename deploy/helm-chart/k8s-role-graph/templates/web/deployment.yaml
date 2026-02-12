@@ -1,0 +1,86 @@
+{{- $web := .Values.web }}
+
+{{- if $web.enabled }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "k8s-role-graph.fullname" . }}
+  labels:
+    component.incloud.io/name: web
+    {{- include "k8s-role-graph.labels" . | nindent 4 }}
+spec:
+  {{- if not $web.autoscaling.enabled }}
+  replicas: {{ $web.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      component.incloud.io/name: web
+      {{- include "k8s-role-graph.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with $web.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        component.incloud.io/name: web
+        {{- include "k8s-role-graph.labels" . | nindent 8 }}
+        {{- with $web.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with $web.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "k8s-role-graph.webServiceAccountName" . }}
+      {{- with $web.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: {{ .Chart.Name }}
+          {{- with $web.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          image: "{{ $web.image.repository }}:{{ $web.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ $web.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ $web.service.port }}
+              protocol: TCP
+          {{- with $web.livenessProbe }}
+          livenessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with $web.readinessProbe }}
+          readinessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with $web.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with $web.volumeMounts }}
+          volumeMounts:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      {{- with $web.volumes }}
+      volumes:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $web.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $web.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $web.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end}}
