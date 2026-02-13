@@ -5,7 +5,7 @@ kind: APIService
 metadata:
   name: v1alpha1.rbacgraph.incloud.io
   annotations:
-    cert-manager.io/inject-ca-from: {{ .Release.Namespace }}/rbacgraph-ca
+    cert-manager.io/inject-ca-from: "{{ .Release.Namespace }}/{{ include "k8s-role-graph.fullname" . }}-server"
   labels:
     component.incloud.io/name: server
     {{- include "k8s-role-graph.labels" . | nindent 4 }}
