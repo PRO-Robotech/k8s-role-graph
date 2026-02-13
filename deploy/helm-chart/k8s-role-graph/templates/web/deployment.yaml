@@ -5,7 +5,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "k8s-role-graph.fullname" . }}
+  name: {{ include "k8s-role-graph.fullname" . }}-web
   labels:
     component.incloud.io/name: web
     {{- include "k8s-role-graph.labels" . | nindent 4 }}
