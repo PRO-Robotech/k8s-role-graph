@@ -40,7 +40,7 @@ jobs:
 
           echo "Using chart version: $VERSION"
 
-          yq -i ".version = \"${VERSION}\"" Chart.yaml
+          yq -i ".version = \"${VERSION}\"" ${CHART_DIR}/Chart.yaml
 
       - name: Package & Push
         run: |
