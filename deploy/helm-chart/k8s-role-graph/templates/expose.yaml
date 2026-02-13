@@ -74,38 +74,17 @@ spec:
   gateways:
     - {{ $istio.gateway.name }}
   http:
-    - match:
-        - uri:
-            exact: {{ $expose.path }}
-      redirect:
-        {{ if or (eq $tls.certSource "certmanager") (eq $tls.certSource "secret") }}
-        scheme: https
-        {{ end }}
-        uri: {{ $expose.path }}client
-
-    - name: client
+    - name: web
       match:
         - uri:
-            prefix: /client
+            prefix: {{ $expose.path }}
       rewrite:
-        uri: /client
+        uri: {{ $expose.path }}
       route:
         - destination:
             host: {{ include "k8s-role-graph.fullname" . }}-web
             port:
-              number: {{ $web.service.ports.ingress.port }}
-
-    - name: server
-      match:
-        - uri:
-            prefix: /server/
-      rewrite:
-        uri: /
-      route:
-        - destination:
-            host: {{ include "k8s-role-graph.fullname" . }}-server
-            port:
-              number: {{ $server.service.ports.server.port }}
+              number: {{ $web.service.port }}
   {{ else if eq $expose.resourceType "ingress" }}
 ---
 apiVersion: networking.k8s.io/v1
@@ -156,20 +135,12 @@ spec:
     - host: "{{ .Values.externalDomain }}"
       http:
         paths:
-          - path: {{ $expose.path }}client
+          - path: {{ $expose.path }}
             pathType: Prefix
             backend:
               service:
                 name: {{ include "k8s-role-graph.fullname" . }}-web
                 port:
-                  number: {{ $web.service.ports.ingress.port }}
-
-          - path: {{ $expose.path }}server/
-            pathType: Prefix
-            backend:
-              service:
-                name: {{ include "k8s-role-graph.fullname" . }}-server
-                port:
-                  number: {{ $server.service.ports.server.port }}
+                  number: {{ $web.service.port }}
   {{- end }}
 {{- end }}
