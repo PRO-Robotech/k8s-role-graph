@@ -34,7 +34,6 @@ Create chart name and version as used by the chart label.
 Common labels
 */}}
 {{- define "k8s-role-graph.labels" -}}
-helm.sh/chart: {{ include "k8s-role-graph.chart" . }}
 {{ include "k8s-role-graph.selectorLabels" . }}
 {{- if .Chart.AppVersion }}
 app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
@@ -54,16 +53,18 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 Create the name of the service account to use
 */}}
 {{- define "k8s-role-graph.serverServiceAccountName" -}}
+{{- $defaultSAName := printf "%s-server" (include "k8s-role-graph.fullname" .) }}
 {{- if .Values.server.serviceAccount.create }}
-{{- default (include "k8s-role-graph.fullname" .) .Values.server.serviceAccount.name }}
+{{- default $defaultSAName .Values.web.serviceAccount.name }}
 {{- else }}
 {{- default "default" .Values.server.serviceAccount.name }}
 {{- end }}
 {{- end }}
 
 {{- define "k8s-role-graph.webServiceAccountName" -}}
+{{- $defaultSAName := printf "%s-web" (include "k8s-role-graph.fullname" .) }}
 {{- if .Values.web.serviceAccount.create }}
-{{- default (include "k8s-role-graph.fullname" .) .Values.web.serviceAccount.name }}
+{{- default $defaultSAName .Values.web.serviceAccount.name }}
 {{- else }}
 {{- default "default" .Values.web.serviceAccount.name }}
 {{- end }}
