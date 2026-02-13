@@ -78,8 +78,6 @@ spec:
       match:
         - uri:
             prefix: {{ $expose.path }}
-      rewrite:
-        uri: {{ $expose.path }}
       route:
         - destination:
             host: {{ include "k8s-role-graph.fullname" . }}-web
