@@ -18,5 +18,4 @@ spec:
     name: {{ include "k8s-role-graph.fullname" . }}-server
     namespace: {{ .Release.Namespace }}
     port: {{ .Values.server.service.port }}
-  insecureSkipTLSVerify: false
 {{- end }}
