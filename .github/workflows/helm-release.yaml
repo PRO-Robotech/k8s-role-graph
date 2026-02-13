@@ -1,4 +1,4 @@
-name: release
+name: release-helm-chart
 on:
   push:
     branches:
