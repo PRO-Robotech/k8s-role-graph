@@ -11,9 +11,9 @@ spec:
   type: {{ .Values.server.service.type }}
   ports:
     - port: {{ .Values.server.service.port }}
-      targetPort: http
+      targetPort: https
       protocol: TCP
-      name: http
+      name: https
   selector:
     component.incloud.io/name: server
     {{- include "k8s-role-graph.selectorLabels" . | nindent 4 }}
