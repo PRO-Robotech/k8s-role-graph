@@ -1,4 +1,29 @@
 .cache/
 *.test
 /bin/
+/openapi-spec
 .DS_Store
+
+# Build artifacts
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Secrets / credentials
+*.pem
+*.key
+.env
+.env.*
+
+# IDE
+.idea/
+.vscode/
+
+# Test / coverage
+coverage.*
+
+# Misc
+*.log
+tmp/
+response.json

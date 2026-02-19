@@ -14,6 +14,11 @@ spec:
         app.kubernetes.io/name: rbacgraph-web
     spec:
       serviceAccountName: rbacgraph-web
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: web
           image: rbacgraph-web:dev
@@ -21,6 +26,18 @@ spec:
           ports:
             - name: http
               containerPort: 8080
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 25m
+              memory: 32Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
           readinessProbe:
             httpGet:
               path: /api/health

@@ -9,8 +9,9 @@ import (
 var SchemeGroupVersion = schema.GroupVersion{Group: GroupName, Version: Version}
 
 var (
-	SchemeBuilder = runtime.NewSchemeBuilder(addKnownTypes)
-	AddToScheme   = SchemeBuilder.AddToScheme
+	SchemeBuilder      = runtime.NewSchemeBuilder(addKnownTypes)
+	localSchemeBuilder = &SchemeBuilder
+	AddToScheme        = SchemeBuilder.AddToScheme
 )
 
 func addKnownTypes(scheme *runtime.Scheme) error {
@@ -18,5 +19,6 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&RoleGraphReview{},
 	)
 	metav1.AddToGroupVersion(scheme, SchemeGroupVersion)
+
 	return nil
 }

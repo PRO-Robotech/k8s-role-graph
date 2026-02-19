@@ -248,6 +248,13 @@ func (in *RuleRef) DeepCopyInto(out *RuleRef) {
 		*out = make([]string, len(*in))
 		copy(*out, *in)
 	}
+	if in.ExpandedRefs != nil {
+		in, out := &in.ExpandedRefs, &out.ExpandedRefs
+		*out = make([]RuleRef, len(*in))
+		for i := range *in {
+			(*in)[i].DeepCopyInto(&(*out)[i])
+		}
+	}
 	return
 }
 
