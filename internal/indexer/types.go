@@ -82,6 +82,16 @@ type WorkloadRecord struct {
 	OwnerReferences []metav1.OwnerReference
 }
 
+// Scope abstracts the access-scope check used by Scoped().
+// authz.AccessScope satisfies this interface.
+type Scope interface {
+	IsUnrestricted() bool
+	AllowRole(namespace string) bool
+	AllowBinding(namespace string) bool
+	AllowPod(namespace string) bool
+	AllowWorkload(namespace string) bool
+}
+
 type Snapshot struct {
 	BuiltAt               time.Time
 	RolesByID             map[RoleID]*RoleRecord
@@ -95,7 +105,6 @@ type Snapshot struct {
 	AllRoleIDs            []RoleID
 	KnownGaps             []string
 	Warnings              []string
-	resourcesIndexInit    bool
 }
 
 func (s *Snapshot) CloneKnownGaps() []string {
@@ -104,6 +113,7 @@ func (s *Snapshot) CloneKnownGaps() []string {
 	}
 	out := make([]string, len(s.KnownGaps))
 	copy(out, s.KnownGaps)
+
 	return out
 }
 
@@ -113,5 +123,6 @@ func (s *Snapshot) CloneWarnings() []string {
 	}
 	out := make([]string, len(s.Warnings))
 	copy(out, s.Warnings)
+
 	return out
 }

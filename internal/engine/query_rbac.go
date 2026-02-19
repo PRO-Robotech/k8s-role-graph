@@ -1,12 +1,16 @@
 package engine
 
 import (
+	"fmt"
+	"sort"
+	"strings"
+
 	"k8s-role-graph/internal/indexer"
-	api "k8s-role-graph/pkg/apis/rbacgraph/v1alpha1"
+	api "k8s-role-graph/pkg/apis/rbacgraph"
 )
 
+//nolint:gocognit,gocyclo // core graph-building loop with necessary branching
 func (qc *queryContext) buildRBACGraph(roleIDs []indexer.RoleID) {
-	e := &Engine{}
 	for _, roleID := range roleIDs {
 		role, ok := qc.snapshot.RolesByID[roleID]
 		if !ok {
@@ -16,7 +20,15 @@ func (qc *queryContext) buildRBACGraph(roleIDs []indexer.RoleID) {
 			continue
 		}
 
-		matches := e.matchRole(role, qc.spec)
+		matches := matchRole(role, qc.spec)
+		if qc.discovery != nil {
+			qc.annotatePhantomRefs(matches)
+			if qc.spec.FilterPhantomAPIs {
+				matches = filterPhantomRefs(matches)
+			}
+			qc.expandWildcardRefs(matches)
+			qc.annotateUnsupportedVerbs(matches)
+		}
 		if len(matches) == 0 {
 			continue
 		}
@@ -28,91 +40,307 @@ func (qc *queryContext) buildRBACGraph(roleIDs []indexer.RoleID) {
 			continue
 		}
 
-		roleNodeID := upsertRoleNode(&qc.status.Graph.Nodes, qc.nodeSeen, qc.nodeIndex, role, qc.snapshot.AggregatedRoleSources[roleID], matches)
+		roleNodeID := qc.upsertRoleNode(role, qc.snapshot.AggregatedRoleSources[roleID], matches)
 		qc.roleSeen[roleID] = struct{}{}
 		for _, sourceRoleID := range qc.snapshot.AggregatedRoleSources[roleID] {
 			sourceRole, ok := qc.snapshot.RolesByID[sourceRoleID]
 			if !ok {
 				continue
 			}
-			sourceNodeID := upsertRoleNode(&qc.status.Graph.Nodes, qc.nodeSeen, qc.nodeIndex, sourceRole, qc.snapshot.AggregatedRoleSources[sourceRoleID], nil)
-			edgeID := edgeIDFor(sourceNodeID, roleNodeID, api.GraphEdgeTypeAggregates)
-			if _, exists := qc.edgeSeen[edgeID]; !exists {
-				qc.status.Graph.Edges = append(qc.status.Graph.Edges, api.GraphEdge{
-					ID:      edgeID,
-					From:    sourceNodeID,
-					To:      roleNodeID,
-					Type:    api.GraphEdgeTypeAggregates,
-					Explain: edgeExplainAggregates,
-				})
-				qc.edgeSeen[edgeID] = struct{}{}
-			}
+			sourceNodeID := qc.upsertRoleNode(sourceRole, qc.snapshot.AggregatedRoleSources[sourceRoleID], nil)
+			qc.appendEdgeIfMissing(api.GraphEdge{
+				ID:      edgeIDFor(sourceNodeID, roleNodeID, api.GraphEdgeTypeAggregates),
+				From:    sourceNodeID,
+				To:      roleNodeID,
+				Type:    api.GraphEdgeTypeAggregates,
+				Explain: edgeExplainAggregates,
+			})
 		}
 
 		if len(filteredBindings) == 0 {
-			accumulateResourceRows(qc.resourceRows, matches, roleID, "", "")
+			qc.accumulateResourceRows(matches, roleID, "", "")
+
 			continue
 		}
 
 		for _, binding := range filteredBindings {
 			bindingNodeIDValue := bindingNodeID(binding)
-			if _, exists := qc.nodeSeen[bindingNodeIDValue]; !exists {
-				qc.status.Graph.Nodes = append(qc.status.Graph.Nodes, api.GraphNode{
-					ID:        bindingNodeIDValue,
-					Type:      bindingType(binding),
-					Name:      binding.Name,
-					Namespace: binding.Namespace,
-				})
-				qc.nodeSeen[bindingNodeIDValue] = struct{}{}
-			}
+			qc.addNodeIfMissing(api.GraphNode{
+				ID:        bindingNodeIDValue,
+				Type:      bindingType(binding),
+				Name:      binding.Name,
+				Namespace: binding.Namespace,
+			})
 			qc.bindingSeen[bindingNodeIDValue] = struct{}{}
 
-			edgeID := edgeIDFor(roleNodeID, bindingNodeIDValue, api.GraphEdgeTypeGrants)
-			if _, exists := qc.edgeSeen[edgeID]; !exists {
-				qc.status.Graph.Edges = append(qc.status.Graph.Edges, api.GraphEdge{
-					ID:       edgeID,
-					From:     roleNodeID,
-					To:       bindingNodeIDValue,
-					Type:     api.GraphEdgeTypeGrants,
-					RuleRefs: matches,
-					Explain:  edgeExplainGrants,
-				})
-				qc.edgeSeen[edgeID] = struct{}{}
-			}
+			qc.appendEdgeIfMissing(api.GraphEdge{
+				ID:       edgeIDFor(roleNodeID, bindingNodeIDValue, api.GraphEdgeTypeGrants),
+				From:     roleNodeID,
+				To:       bindingNodeIDValue,
+				Type:     api.GraphEdgeTypeGrants,
+				RuleRefs: matches,
+				Explain:  edgeExplainGrants,
+			})
 
 			if len(binding.Subjects) == 0 {
-				accumulateResourceRows(qc.resourceRows, matches, roleID, bindingNodeIDValue, "")
+				qc.accumulateResourceRows(matches, roleID, bindingNodeIDValue, "")
+
 				continue
 			}
 
 			for _, subject := range binding.Subjects {
 				subjectNodeIDValue := subjectNodeID(subject)
-				if _, exists := qc.nodeSeen[subjectNodeIDValue]; !exists {
-					qc.status.Graph.Nodes = append(qc.status.Graph.Nodes, api.GraphNode{
-						ID:        subjectNodeIDValue,
-						Type:      subjectType(subject.Kind),
-						Name:      subject.Name,
-						Namespace: subject.Namespace,
-					})
-					qc.nodeSeen[subjectNodeIDValue] = struct{}{}
-				}
+				qc.addNodeIfMissing(api.GraphNode{
+					ID:        subjectNodeIDValue,
+					Type:      subjectType(subject.Kind),
+					Name:      subject.Name,
+					Namespace: subject.Namespace,
+				})
 				qc.subjectSeen[subjectNodeIDValue] = struct{}{}
-				trackServiceAccountSubject(qc.saSubjects, subjectNodeIDValue, subject, binding.Namespace)
+				qc.trackServiceAccountSubject(subjectNodeIDValue, subject, binding.Namespace)
 
-				edgeID = edgeIDFor(bindingNodeIDValue, subjectNodeIDValue, api.GraphEdgeTypeSubjects)
-				if _, exists := qc.edgeSeen[edgeID]; !exists {
-					qc.status.Graph.Edges = append(qc.status.Graph.Edges, api.GraphEdge{
-						ID:      edgeID,
-						From:    bindingNodeIDValue,
-						To:      subjectNodeIDValue,
-						Type:    api.GraphEdgeTypeSubjects,
-						Explain: edgeExplainSubjects,
-					})
-					qc.edgeSeen[edgeID] = struct{}{}
-				}
+				qc.appendEdgeIfMissing(api.GraphEdge{
+					ID:      edgeIDFor(bindingNodeIDValue, subjectNodeIDValue, api.GraphEdgeTypeSubjects),
+					From:    bindingNodeIDValue,
+					To:      subjectNodeIDValue,
+					Type:    api.GraphEdgeTypeSubjects,
+					Explain: edgeExplainSubjects,
+				})
 
-				accumulateResourceRows(qc.resourceRows, matches, roleID, bindingNodeIDValue, subjectNodeIDValue)
+				qc.accumulateResourceRows(matches, roleID, bindingNodeIDValue, subjectNodeIDValue)
 			}
 		}
 	}
+}
+
+//nolint:gocognit,gocyclo // multi-condition validation logic
+func (qc *queryContext) annotatePhantomRefs(refs []api.RuleRef) {
+	for i := range refs {
+		ref := &refs[i]
+
+		// NonResourceURL-only refs have no API group to validate.
+		if ref.APIGroup == "" && ref.Resource == "" && len(ref.NonResourceURLs) > 0 {
+			continue
+		}
+		// Wildcards can always match something — never phantom.
+		if ref.APIGroup == "*" || ref.Resource == "*" {
+			continue
+		}
+
+		groupResources, groupExists := qc.discovery.ResourcesByGroup[ref.APIGroup]
+		if !groupExists {
+			ref.Phantom = true
+			qc.addWarning(fmt.Sprintf(
+				"API group %q referenced in role rules is not installed in the cluster",
+				ref.APIGroup,
+			))
+
+			continue
+		}
+
+		// Check resource (using "resource/subresource" form for lookup).
+		lookupResource := ref.Resource
+		if ref.Subresource != "" && !strings.Contains(ref.Resource, "/") {
+			lookupResource = ref.Resource + "/" + ref.Subresource
+		}
+		if lookupResource != "" { //nolint:nestif // multi-level resource/subresource lookup
+			if _, resourceExists := groupResources[lookupResource]; !resourceExists {
+				baseResource := ref.Resource
+				if idx := strings.Index(baseResource, "/"); idx >= 0 {
+					baseResource = baseResource[:idx]
+				}
+				if _, baseExists := groupResources[baseResource]; !baseExists {
+					ref.Phantom = true
+					qc.addWarning(fmt.Sprintf(
+						"resource %q in API group %q is not registered in the cluster",
+						lookupResource, ref.APIGroup,
+					))
+				}
+			}
+		}
+	}
+}
+
+func filterPhantomRefs(refs []api.RuleRef) []api.RuleRef {
+	filtered := make([]api.RuleRef, 0, len(refs))
+	for i := range refs {
+		if !refs[i].Phantom {
+			filtered = append(filtered, refs[i])
+		}
+	}
+
+	return filtered
+}
+
+const maxExpandedRefsPerParent = 2000
+
+func (qc *queryContext) expandWildcardRefs(refs []api.RuleRef) {
+	for i := range refs {
+		ref := &refs[i]
+
+		if ref.APIGroup != "*" && ref.Resource != "*" && ref.Verb != "*" {
+			continue
+		}
+		if ref.APIGroup == "" && ref.Resource == "" && len(ref.NonResourceURLs) > 0 {
+			continue
+		}
+
+		expanded := qc.resolveWildcardRef(ref)
+		if len(expanded) > maxExpandedRefsPerParent {
+			expanded = expanded[:maxExpandedRefsPerParent]
+			qc.addWarning(fmt.Sprintf(
+				"wildcard expansion for %s/%s/%s truncated at %d entries",
+				ref.APIGroup, ref.Resource, ref.Verb, maxExpandedRefsPerParent,
+			))
+		}
+		if len(expanded) > 0 {
+			ref.ExpandedRefs = expanded
+		}
+	}
+}
+
+//nolint:gocognit,gocyclo // multi-group verb validation
+func (qc *queryContext) annotateUnsupportedVerbs(refs []api.RuleRef) {
+	for i := range refs {
+		ref := &refs[i]
+		if ref.Verb == "*" || ref.Verb == "" {
+			continue
+		}
+		resource := ref.Resource
+		if ref.Subresource != "" {
+			resource = ref.Resource + "/" + ref.Subresource
+		}
+		// Determine the set of groups to check. For apiGroup=* we check all
+		// groups that actually contain this resource.
+		groups := []string{ref.APIGroup}
+		if ref.APIGroup == "*" {
+			groups = qc.resolveGroups("*")
+		}
+		supported := false
+		resourceFound := false
+		for _, group := range groups {
+			groupVerbs, ok := qc.discovery.VerbsByGroupResource[group]
+			if !ok {
+				continue // group not in discovery — skip
+			}
+			verbs, ok := groupVerbs[resource]
+			if !ok {
+				continue // resource not in this group — skip
+			}
+			resourceFound = true
+			for _, v := range verbs {
+				if strings.EqualFold(v, ref.Verb) {
+					supported = true
+
+					break
+				}
+			}
+			if supported {
+				break
+			}
+		}
+		// Only flag as unsupported when the resource exists in discovery
+		// but the verb is not in any group's supported verb list.
+		ref.UnsupportedVerb = resourceFound && !supported
+	}
+}
+
+func (qc *queryContext) resolveWildcardRef(ref *api.RuleRef) []api.RuleRef {
+	groups := qc.resolveGroups(ref.APIGroup)
+	var result []api.RuleRef
+
+	for _, group := range groups {
+		resources := qc.resolveResources(group, ref.Resource)
+		for _, resource := range resources {
+			// Use the full resource key (e.g. "pods/exec") for discovery lookups
+			// so that verb validation is against the actual subresource, not the parent.
+			fullResource := resource
+			if ref.Subresource != "" {
+				fullResource = resource + "/" + ref.Subresource
+			}
+			verbs := qc.resolveVerbs(group, fullResource, ref.Verb)
+			for _, verb := range verbs {
+				result = append(result, api.RuleRef{
+					APIGroup:      group,
+					Resource:      resource,
+					Subresource:   ref.Subresource,
+					Verb:          verb,
+					ResourceNames: ref.ResourceNames,
+				})
+				if len(result) > maxExpandedRefsPerParent {
+					return result
+				}
+			}
+		}
+	}
+
+	return result
+}
+
+func (qc *queryContext) resolveGroups(apiGroup string) []string {
+	if apiGroup != "*" {
+		return []string{apiGroup}
+	}
+	groups := make([]string, 0, len(qc.discovery.ResourcesByGroup))
+	for g := range qc.discovery.ResourcesByGroup {
+		groups = append(groups, g)
+	}
+	sort.Strings(groups)
+
+	return groups
+}
+
+func (qc *queryContext) resolveResources(group, resource string) []string {
+	if resource != "*" {
+		return []string{resource}
+	}
+	groupResources := qc.discovery.ResourcesByGroup[group]
+	if len(groupResources) == 0 {
+		return nil
+	}
+	resources := make([]string, 0, len(groupResources))
+	for r := range groupResources {
+		resources = append(resources, r)
+	}
+	sort.Strings(resources)
+
+	return resources
+}
+
+func (qc *queryContext) resolveVerbs(group, resource, verb string) []string {
+	groupVerbs, groupKnown := qc.discovery.VerbsByGroupResource[group]
+
+	if verb != "*" {
+		if !groupKnown {
+			return []string{verb} // group not in discovery — pass through (graceful degradation)
+		}
+		supported, resourceKnown := groupVerbs[resource]
+		if !resourceKnown {
+			return nil // group known, resource doesn't exist in it
+		}
+		for _, v := range supported {
+			if strings.EqualFold(v, verb) {
+				return []string{verb}
+			}
+		}
+
+		return nil // verb not supported by this resource
+	}
+
+	// verb == "*"
+	if !groupKnown {
+		// Group unknown — fall back to all known verbs (graceful degradation).
+		verbs := make([]string, 0, len(qc.discovery.AllVerbs))
+		for v := range qc.discovery.AllVerbs {
+			verbs = append(verbs, v)
+		}
+		sort.Strings(verbs)
+
+		return verbs
+	}
+	if verbs, ok := groupVerbs[resource]; ok {
+		return verbs // already sorted during cache build
+	}
+
+	return nil // group known, resource doesn't exist in it
 }

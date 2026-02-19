@@ -1,16 +1,16 @@
 package indexer
 
 import (
+	"maps"
+	"slices"
 	"strings"
-
-	rbacv1 "k8s.io/api/rbac/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-func recID(kind, namespace, name string) RoleID {
+func RecID(kind, namespace, name string) RoleID {
 	if namespace == "" {
 		return RoleID(strings.ToLower(kind) + ":" + name)
 	}
+
 	return RoleID(strings.ToLower(kind) + ":" + namespace + "/" + name)
 }
 
@@ -19,28 +19,17 @@ func cloneMap(in map[string]string) map[string]string {
 		return nil
 	}
 	out := make(map[string]string, len(in))
-	for k, v := range in {
-		out[k] = v
-	}
+	maps.Copy(out, in)
+
 	return out
 }
 
-func cloneRules(in []rbacv1.PolicyRule) []rbacv1.PolicyRule {
+func cloneSlice[T any](in []T) []T {
 	if len(in) == 0 {
 		return nil
 	}
-	out := make([]rbacv1.PolicyRule, len(in))
-	copy(out, in)
-	return out
-}
 
-func cloneOwnerReferences(in []metav1.OwnerReference) []metav1.OwnerReference {
-	if len(in) == 0 {
-		return nil
-	}
-	out := make([]metav1.OwnerReference, len(in))
-	copy(out, in)
-	return out
+	return slices.Clone(in)
 }
 
 func serviceAccountKey(namespace, name string) ServiceAccountKey {
@@ -52,6 +41,7 @@ func normalizeServiceAccountName(name string) string {
 	if normalized == "" {
 		return DefaultServiceAccountName
 	}
+
 	return normalized
 }
 
@@ -69,6 +59,7 @@ func normalizedSlice(values []string) []string {
 		uniq[n] = struct{}{}
 		out = append(out, n)
 	}
+
 	return out
 }
 

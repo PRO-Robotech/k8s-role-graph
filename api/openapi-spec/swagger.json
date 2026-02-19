@@ -280,7 +280,7 @@
       "type": "string",
       "format": "date-time"
     },
-    "v1alpha1.Graph": {
+    "k8s-role-graph.pkg.apis.rbacgraph.v1alpha1.Graph": {
       "type": "object",
       "required": [
         "nodes",
@@ -291,19 +291,19 @@
           "type": "array",
           "items": {
             "default": {},
-            "$ref": "#/definitions/v1alpha1.GraphEdge"
+            "$ref": "#/definitions/k8s-role-graph.pkg.apis.rbacgraph.v1alpha1.GraphEdge"
           }
         },
         "nodes": {
           "type": "array",
           "items": {
             "default": {},
-            "$ref": "#/definitions/v1alpha1.GraphNode"
+            "$ref": "#/definitions/k8s-role-graph.pkg.apis.rbacgraph.v1alpha1.GraphNode"
           }
         }
       }
     },
-    "v1alpha1.GraphEdge": {
+    "k8s-role-graph.pkg.apis.rbacgraph.v1alpha1.GraphEdge": {
       "type": "object",
       "required": [
         "id",
@@ -327,7 +327,7 @@
           "type": "array",
           "items": {
             "default": {},
-            "$ref": "#/definitions/v1alpha1.RuleRef"
+            "$ref": "#/definitions/k8s-role-graph.pkg.apis.rbacgraph.v1alpha1.RuleRef"
           }
         },
         "to": {
@@ -346,15 +346,9 @@
             "subjects"
           ]
         }
-      },
-      "example": {
-        "from": "clusterRoleBinding/read-secrets",
-        "id": "e1",
-        "to": "clusterRole/secret-reader",
-        "type": "grants"
       }
     },
-    "v1alpha1.GraphNode": {
+    "k8s-role-graph.pkg.apis.rbacgraph.v1alpha1.GraphNode": {
       "type": "object",
       "required": [
         "id",
@@ -398,7 +392,7 @@
           "type": "array",
           "items": {
             "default": {},
-            "$ref": "#/definitions/v1alpha1.RuleRef"
+            "$ref": "#/definitions/k8s-role-graph.pkg.apis.rbacgraph.v1alpha1.RuleRef"
           }
         },
         "name": {
@@ -435,22 +429,9 @@
         "workloadKind": {
           "type": "string"
         }
-      },
-      "example": {
-        "id": "clusterRole/secret-reader",
-        "matchedRuleRefs": [
-          {
-            "apiGroup": "",
-            "resource": "secrets",
-            "verb": "get"
-          }
-        ],
-        "name": "secret-reader",
-        "namespace": "",
-        "type": "clusterRole"
       }
     },
-    "v1alpha1.NamespaceScope": {
+    "k8s-role-graph.pkg.apis.rbacgraph.v1alpha1.NamespaceScope": {
       "type": "object",
       "properties": {
         "namespaces": {
@@ -465,7 +446,7 @@
         }
       }
     },
-    "v1alpha1.ResourceMapRow": {
+    "k8s-role-graph.pkg.apis.rbacgraph.v1alpha1.ResourceMapRow": {
       "type": "object",
       "required": [
         "roleCount",
@@ -497,17 +478,9 @@
         "verb": {
           "type": "string"
         }
-      },
-      "example": {
-        "apiGroup": "",
-        "bindingCount": 3,
-        "resource": "secrets",
-        "roleCount": 2,
-        "subjectCount": 5,
-        "verb": "get"
       }
     },
-    "v1alpha1.RoleGraphReview": {
+    "k8s-role-graph.pkg.apis.rbacgraph.v1alpha1.RoleGraphReview": {
       "description": "RoleGraphReview queries the RBAC role graph and returns matched roles, bindings, subjects, and optionally pods/workloads as a directed graph.",
       "type": "object",
       "required": [
@@ -528,17 +501,20 @@
         },
         "spec": {
           "default": {},
-          "$ref": "#/definitions/v1alpha1.RoleGraphReviewSpec"
+          "$ref": "#/definitions/k8s-role-graph.pkg.apis.rbacgraph.v1alpha1.RoleGraphReviewSpec"
         },
         "status": {
           "default": {},
-          "$ref": "#/definitions/v1alpha1.RoleGraphReviewStatus"
+          "$ref": "#/definitions/k8s-role-graph.pkg.apis.rbacgraph.v1alpha1.RoleGraphReviewStatus"
         }
       }
     },
-    "v1alpha1.RoleGraphReviewSpec": {
+    "k8s-role-graph.pkg.apis.rbacgraph.v1alpha1.RoleGraphReviewSpec": {
       "type": "object",
       "properties": {
+        "filterPhantomAPIs": {
+          "type": "boolean"
+        },
         "includePods": {
           "type": "boolean"
         },
@@ -566,7 +542,7 @@
         },
         "namespaceScope": {
           "default": {},
-          "$ref": "#/definitions/v1alpha1.NamespaceScope"
+          "$ref": "#/definitions/k8s-role-graph.pkg.apis.rbacgraph.v1alpha1.NamespaceScope"
         },
         "podPhaseMode": {
           "description": "Possible enum values:\n - `\"active\"`\n - `\"all\"`\n - `\"running\"`",
@@ -579,40 +555,19 @@
         },
         "selector": {
           "default": {},
-          "$ref": "#/definitions/v1alpha1.Selector"
-        }
-      },
-      "example": {
-        "includePods": true,
-        "includeRuleMetadata": true,
-        "includeWorkloads": true,
-        "matchMode": "any",
-        "maxPodsPerSubject": 20,
-        "maxWorkloadsPerPod": 10,
-        "namespaceScope": {
-          "namespaces": [
-            "default",
-            "kube-system"
-          ],
-          "strict": false
+          "$ref": "#/definitions/k8s-role-graph.pkg.apis.rbacgraph.v1alpha1.Selector"
         },
-        "podPhaseMode": "active",
-        "selector": {
-          "apiGroups": [
-            ""
-          ],
-          "resources": [
-            "secrets"
-          ],
-          "verbs": [
-            "get",
-            "list",
-            "watch"
+        "wildcardMode": {
+          "description": "Possible enum values:\n - `\"exact\"`\n - `\"expand\"`",
+          "type": "string",
+          "enum": [
+            "exact",
+            "expand"
           ]
         }
       }
     },
-    "v1alpha1.RoleGraphReviewStatus": {
+    "k8s-role-graph.pkg.apis.rbacgraph.v1alpha1.RoleGraphReviewStatus": {
       "type": "object",
       "required": [
         "matchedRoles",
@@ -624,7 +579,7 @@
       "properties": {
         "graph": {
           "default": {},
-          "$ref": "#/definitions/v1alpha1.Graph"
+          "$ref": "#/definitions/k8s-role-graph.pkg.apis.rbacgraph.v1alpha1.Graph"
         },
         "knownGaps": {
           "type": "array",
@@ -660,7 +615,7 @@
           "type": "array",
           "items": {
             "default": {},
-            "$ref": "#/definitions/v1alpha1.ResourceMapRow"
+            "$ref": "#/definitions/k8s-role-graph.pkg.apis.rbacgraph.v1alpha1.ResourceMapRow"
           }
         },
         "warnings": {
@@ -670,78 +625,9 @@
             "default": ""
           }
         }
-      },
-      "example": {
-        "graph": {
-          "edges": [
-            {
-              "from": "clusterRoleBinding/read-secrets",
-              "id": "e1",
-              "to": "clusterRole/secret-reader",
-              "type": "grants"
-            },
-            {
-              "from": "sa/default/my-app",
-              "id": "e2",
-              "to": "clusterRoleBinding/read-secrets",
-              "type": "subjects"
-            },
-            {
-              "from": "pod/default/my-app-xyz",
-              "id": "e3",
-              "to": "sa/default/my-app",
-              "type": "runsAs"
-            }
-          ],
-          "nodes": [
-            {
-              "id": "clusterRole/secret-reader",
-              "name": "secret-reader",
-              "type": "clusterRole"
-            },
-            {
-              "id": "clusterRoleBinding/read-secrets",
-              "name": "read-secrets",
-              "type": "clusterRoleBinding"
-            },
-            {
-              "id": "sa/default/my-app",
-              "name": "my-app",
-              "namespace": "default",
-              "type": "serviceAccount"
-            },
-            {
-              "id": "pod/default/my-app-xyz",
-              "name": "my-app-xyz",
-              "namespace": "default",
-              "podPhase": "Running",
-              "type": "pod"
-            }
-          ]
-        },
-        "matchedBindings": 2,
-        "matchedPods": 1,
-        "matchedRoles": 2,
-        "matchedSubjects": 1,
-        "resourceMap": [
-          {
-            "bindingCount": 1,
-            "resource": "secrets",
-            "roleCount": 1,
-            "subjectCount": 1,
-            "verb": "get"
-          },
-          {
-            "bindingCount": 1,
-            "resource": "secrets",
-            "roleCount": 1,
-            "subjectCount": 1,
-            "verb": "list"
-          }
-        ]
       }
     },
-    "v1alpha1.RuleRef": {
+    "k8s-role-graph.pkg.apis.rbacgraph.v1alpha1.RuleRef": {
       "type": "object",
       "properties": {
         "apiGroup": {
@@ -750,12 +636,22 @@
         "apiVersion": {
           "type": "string"
         },
+        "expandedRefs": {
+          "type": "array",
+          "items": {
+            "default": {},
+            "$ref": "#/definitions/k8s-role-graph.pkg.apis.rbacgraph.v1alpha1.RuleRef"
+          }
+        },
         "nonResourceURLs": {
           "type": "array",
           "items": {
             "type": "string",
             "default": ""
           }
+        },
+        "phantom": {
+          "type": "boolean"
         },
         "resource": {
           "type": "string"
@@ -777,18 +673,15 @@
         "subresource": {
           "type": "string"
         },
+        "unsupportedVerb": {
+          "type": "boolean"
+        },
         "verb": {
           "type": "string"
         }
-      },
-      "example": {
-        "apiGroup": "",
-        "resource": "secrets",
-        "subresource": "",
-        "verb": "get"
       }
     },
-    "v1alpha1.Selector": {
+    "k8s-role-graph.pkg.apis.rbacgraph.v1alpha1.Selector": {
       "type": "object",
       "properties": {
         "apiGroups": {
@@ -826,19 +719,6 @@
             "default": ""
           }
         }
-      },
-      "example": {
-        "apiGroups": [
-          ""
-        ],
-        "resources": [
-          "pods",
-          "secrets"
-        ],
-        "verbs": [
-          "get",
-          "list"
-        ]
       }
     }
   }

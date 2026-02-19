@@ -2,7 +2,7 @@ package indexer
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -12,10 +12,13 @@ import (
 	corelisters "k8s.io/client-go/listers/core/v1"
 	rbaclisters "k8s.io/client-go/listers/rbac/v1"
 
+	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 )
+
+const rebuildDebounceInterval = 500 * time.Millisecond
 
 type Indexer struct {
 	factory informers.SharedInformerFactory
@@ -46,6 +49,11 @@ type Indexer struct {
 	snapshot                  atomic.Pointer[Snapshot]
 	synced                    atomic.Bool
 	rebuildMu                 sync.Mutex
+	rebuildTimer              *time.Timer
+	timerMu                   sync.Mutex
+
+	discoveryClient discovery.DiscoveryInterface
+	discoveryCache  atomic.Pointer[APIDiscoveryCache]
 }
 
 func New(client kubernetes.Interface, resyncPeriod time.Duration) *Indexer {
@@ -64,6 +72,7 @@ func New(client kubernetes.Interface, resyncPeriod time.Duration) *Indexer {
 
 	i := &Indexer{
 		factory:                     factory,
+		discoveryClient:             client.Discovery(),
 		rolesInformer:               roles.Informer(),
 		clusterRolesInformer:        clusterRoles.Informer(),
 		roleBindingsInformer:        roleBindings.Informer(),
@@ -89,23 +98,25 @@ func New(client kubernetes.Interface, resyncPeriod time.Duration) *Indexer {
 	}
 
 	handler := cache.ResourceEventHandlerFuncs{
-		AddFunc:    func(any) { i.rebuild() },
-		UpdateFunc: func(any, any) { i.rebuild() },
-		DeleteFunc: func(any) { i.rebuild() },
+		AddFunc:    func(any) { i.scheduleRebuild() },
+		UpdateFunc: func(any, any) { i.scheduleRebuild() },
+		DeleteFunc: func(any) { i.scheduleRebuild() },
 	}
+	//nolint:errcheck,gosec // AddEventHandler only errors when the informer is stopped
 	i.rolesInformer.AddEventHandler(handler)
-	i.clusterRolesInformer.AddEventHandler(handler)
-	i.roleBindingsInformer.AddEventHandler(handler)
-	i.clusterRoleBindingsInformer.AddEventHandler(handler)
-	i.podsInformer.AddEventHandler(handler)
-	i.deploymentsInformer.AddEventHandler(handler)
-	i.replicaSetsInformer.AddEventHandler(handler)
-	i.statefulSetsInformer.AddEventHandler(handler)
-	i.daemonSetsInformer.AddEventHandler(handler)
-	i.jobsInformer.AddEventHandler(handler)
-	i.cronJobsInformer.AddEventHandler(handler)
+	i.clusterRolesInformer.AddEventHandler(handler)        //nolint:errcheck,gosec // informer is running
+	i.roleBindingsInformer.AddEventHandler(handler)        //nolint:errcheck,gosec // informer is running
+	i.clusterRoleBindingsInformer.AddEventHandler(handler) //nolint:errcheck,gosec // informer is running
+	i.podsInformer.AddEventHandler(handler)                //nolint:errcheck,gosec // informer is running
+	i.deploymentsInformer.AddEventHandler(handler)         //nolint:errcheck,gosec // informer is running
+	i.replicaSetsInformer.AddEventHandler(handler)         //nolint:errcheck,gosec // informer is running
+	i.statefulSetsInformer.AddEventHandler(handler)        //nolint:errcheck,gosec // informer is running
+	i.daemonSetsInformer.AddEventHandler(handler)          //nolint:errcheck,gosec // informer is running
+	i.jobsInformer.AddEventHandler(handler)                //nolint:errcheck,gosec // informer is running
+	i.cronJobsInformer.AddEventHandler(handler)            //nolint:errcheck,gosec // informer is running
 
 	i.snapshot.Store(newEmptySnapshot())
+
 	return i
 }
 
@@ -126,12 +137,14 @@ func (i *Indexer) Start(ctx context.Context) error {
 		i.jobsInformer.HasSynced,
 		i.cronJobsInformer.HasSynced,
 	) {
-		return fmt.Errorf("failed to sync informer caches")
+		return errors.New("failed to sync informer caches")
 	}
 
 	i.rebuild()
 	i.synced.Store(true)
+	go i.refreshDiscoveryLoop(ctx.Done(), 5*time.Minute)
 	<-ctx.Done()
+
 	return nil
 }
 
@@ -139,11 +152,16 @@ func (i *Indexer) IsReady() bool {
 	return i.synced.Load()
 }
 
+func (i *Indexer) DiscoveryCache() *APIDiscoveryCache {
+	return i.discoveryCache.Load()
+}
+
 func (i *Indexer) Snapshot() *Snapshot {
 	s := i.snapshot.Load()
 	if s == nil {
 		return newEmptySnapshot()
 	}
+
 	return s
 }
 
@@ -174,24 +192,33 @@ func (i *Indexer) rebuild() {
 
 	indexPods(next, pods)
 	for _, deployment := range deployments {
-		indexWorkload(next, deployment.UID, "apps/v1", "Deployment", deployment.Namespace, deployment.Name, deployment.OwnerReferences)
+		indexWorkload(next, "apps/v1", "Deployment", deployment.ObjectMeta)
 	}
 	for _, replicaSet := range replicaSets {
-		indexWorkload(next, replicaSet.UID, "apps/v1", "ReplicaSet", replicaSet.Namespace, replicaSet.Name, replicaSet.OwnerReferences)
+		indexWorkload(next, "apps/v1", "ReplicaSet", replicaSet.ObjectMeta)
 	}
 	for _, statefulSet := range statefulSets {
-		indexWorkload(next, statefulSet.UID, "apps/v1", "StatefulSet", statefulSet.Namespace, statefulSet.Name, statefulSet.OwnerReferences)
+		indexWorkload(next, "apps/v1", "StatefulSet", statefulSet.ObjectMeta)
 	}
 	for _, daemonSet := range daemonSets {
-		indexWorkload(next, daemonSet.UID, "apps/v1", "DaemonSet", daemonSet.Namespace, daemonSet.Name, daemonSet.OwnerReferences)
+		indexWorkload(next, "apps/v1", "DaemonSet", daemonSet.ObjectMeta)
 	}
 	for _, job := range jobs {
-		indexWorkload(next, job.UID, "batch/v1", "Job", job.Namespace, job.Name, job.OwnerReferences)
+		indexWorkload(next, "batch/v1", "Job", job.ObjectMeta)
 	}
 	for _, cronJob := range cronJobs {
-		indexWorkload(next, cronJob.UID, "batch/v1", "CronJob", cronJob.Namespace, cronJob.Name, cronJob.OwnerReferences)
+		indexWorkload(next, "batch/v1", "CronJob", cronJob.ObjectMeta)
 	}
 
 	sortSnapshot(next)
 	i.snapshot.Store(next)
+}
+
+func (i *Indexer) scheduleRebuild() {
+	i.timerMu.Lock()
+	defer i.timerMu.Unlock()
+	if i.rebuildTimer != nil {
+		i.rebuildTimer.Stop()
+	}
+	i.rebuildTimer = time.AfterFunc(rebuildDebounceInterval, i.rebuild)
 }

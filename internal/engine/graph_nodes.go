@@ -8,7 +8,7 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 
 	"k8s-role-graph/internal/indexer"
-	api "k8s-role-graph/pkg/apis/rbacgraph/v1alpha1"
+	api "k8s-role-graph/pkg/apis/rbacgraph"
 )
 
 const (
@@ -30,6 +30,7 @@ func roleNodeID(role *indexer.RoleRecord) string {
 	if role.Namespace == "" {
 		return fmt.Sprintf("%s%s:%s", nodeIDPrefixRole, strings.ToLower(role.Kind), role.Name)
 	}
+
 	return fmt.Sprintf("%s%s:%s/%s", nodeIDPrefixRole, strings.ToLower(role.Kind), role.Namespace, role.Name)
 }
 
@@ -37,6 +38,7 @@ func bindingNodeID(binding *indexer.BindingRecord) string {
 	if binding.Namespace == "" {
 		return fmt.Sprintf("%s%s:%s", nodeIDPrefixBinding, strings.ToLower(binding.Kind), binding.Name)
 	}
+
 	return fmt.Sprintf("%s%s:%s/%s", nodeIDPrefixBinding, strings.ToLower(binding.Kind), binding.Namespace, binding.Name)
 }
 
@@ -45,6 +47,7 @@ func subjectNodeID(subject rbacv1.Subject) string {
 	if kind == api.GraphNodeTypeServiceAccount && subject.Namespace != "" {
 		return fmt.Sprintf("%s%s:%s/%s", nodeIDPrefixSubject, kind, subject.Namespace, subject.Name)
 	}
+
 	return fmt.Sprintf("%s%s:%s", nodeIDPrefixSubject, kind, subject.Name)
 }
 
@@ -54,6 +57,7 @@ func podNodeID(pod *indexer.PodRecord) string {
 
 func workloadNodeID(workload *indexer.WorkloadRecord) string {
 	kind := strings.ToLower(workload.Kind)
+
 	return nodeIDPrefixWorkload + kind + ":" + workload.Namespace + "/" + workload.Name
 }
 
@@ -73,6 +77,7 @@ func roleType(role *indexer.RoleRecord) api.GraphNodeType {
 	if role.Kind == indexer.KindClusterRole {
 		return api.GraphNodeTypeClusterRole
 	}
+
 	return api.GraphNodeTypeRole
 }
 
@@ -80,6 +85,7 @@ func bindingType(binding *indexer.BindingRecord) api.GraphNodeType {
 	if binding.Kind == indexer.KindClusterRoleBinding {
 		return api.GraphNodeTypeClusterRoleBinding
 	}
+
 	return api.GraphNodeTypeRoleBinding
 }
 
@@ -94,9 +100,10 @@ func subjectType(kind string) api.GraphNodeType {
 	}
 }
 
-func upsertRoleNode(nodes *[]api.GraphNode, nodeSeen map[string]struct{}, nodeIndex map[string]int, role *indexer.RoleRecord, aggregationSources []indexer.RoleID, matchedRefs []api.RuleRef) string {
+func (qc *queryContext) upsertRoleNode(role *indexer.RoleRecord, aggregationSources []indexer.RoleID, matchedRefs []api.RuleRef) string {
 	roleID := roleNodeID(role)
-	if _, exists := nodeSeen[roleID]; !exists {
+	nodes := &qc.status.Graph.Nodes
+	if _, exists := qc.nodeSeen[roleID]; !exists {
 		node := api.GraphNode{
 			ID:          roleID,
 			Type:        roleType(role),
@@ -116,14 +123,15 @@ func upsertRoleNode(nodes *[]api.GraphNode, nodeSeen map[string]struct{}, nodeIn
 			node.MatchedRuleRefs = append([]api.RuleRef(nil), matchedRefs...)
 		}
 		*nodes = append(*nodes, node)
-		nodeSeen[roleID] = struct{}{}
-		nodeIndex[roleID] = len(*nodes) - 1
+		qc.nodeSeen[roleID] = struct{}{}
+		qc.nodeIndex[roleID] = len(*nodes) - 1
+
 		return roleID
 	}
 
-	if len(aggregationSources) > 0 {
-		idx, ok := nodeIndex[roleID]
-		if ok {
+	idx, ok := qc.nodeIndex[roleID]
+	if ok {
+		if len(aggregationSources) > 0 {
 			(*nodes)[idx].Aggregated = true
 			incoming := make([]string, 0, len(aggregationSources))
 			for _, sourceID := range aggregationSources {
@@ -131,43 +139,42 @@ func upsertRoleNode(nodes *[]api.GraphNode, nodeSeen map[string]struct{}, nodeIn
 			}
 			(*nodes)[idx].AggregationSources = mergeSortedUniqueStrings((*nodes)[idx].AggregationSources, incoming)
 		}
-	}
-	if len(matchedRefs) > 0 {
-		idx, ok := nodeIndex[roleID]
-		if ok {
+		if len(matchedRefs) > 0 {
 			(*nodes)[idx].MatchedRuleRefs = mergeRuleRefs((*nodes)[idx].MatchedRuleRefs, matchedRefs)
 		}
 	}
+
 	return roleID
 }
 
-func addNodeIfMissing(nodes *[]api.GraphNode, nodeSeen map[string]struct{}, node api.GraphNode) bool {
-	if _, exists := nodeSeen[node.ID]; exists {
+func (qc *queryContext) addNodeIfMissing(node api.GraphNode) bool {
+	if _, exists := qc.nodeSeen[node.ID]; exists {
 		return false
 	}
-	*nodes = append(*nodes, node)
-	nodeSeen[node.ID] = struct{}{}
+	qc.status.Graph.Nodes = append(qc.status.Graph.Nodes, node)
+	qc.nodeSeen[node.ID] = struct{}{}
+
 	return true
 }
 
-func appendEdgeIfMissing(edges *[]api.GraphEdge, edgeSeen map[string]struct{}, edge api.GraphEdge) bool {
-	if _, exists := edgeSeen[edge.ID]; exists {
-		return false
+func (qc *queryContext) appendEdgeIfMissing(edge api.GraphEdge) {
+	if _, exists := qc.edgeSeen[edge.ID]; exists {
+		return
 	}
-	*edges = append(*edges, edge)
-	edgeSeen[edge.ID] = struct{}{}
-	return true
+	qc.status.Graph.Edges = append(qc.status.Graph.Edges, edge)
+	qc.edgeSeen[edge.ID] = struct{}{}
 }
 
 func appendUniqueString(values *[]string, seen map[string]struct{}, value string) {
-	if strings.TrimSpace(value) == "" {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
 		return
 	}
-	if _, exists := seen[value]; exists {
+	if _, exists := seen[trimmed]; exists {
 		return
 	}
-	*values = append(*values, value)
-	seen[value] = struct{}{}
+	*values = append(*values, trimmed)
+	seen[trimmed] = struct{}{}
 }
 
 func mergeSortedUniqueStrings(existing, incoming []string) []string {
@@ -188,6 +195,7 @@ func mergeSortedUniqueStrings(existing, incoming []string) []string {
 		merged = append(merged, value)
 	}
 	sort.Strings(merged)
+
 	return merged
 }
 
@@ -213,12 +221,13 @@ func mergeRuleRefs(existing, incoming []api.RuleRef) []api.RuleRef {
 		merged = append(merged, ref)
 	}
 
-	for _, ref := range existing {
-		appendRef(ref)
+	for i := range existing {
+		appendRef(existing[i])
 	}
-	for _, ref := range incoming {
-		appendRef(ref)
+	for i := range incoming {
+		appendRef(incoming[i])
 	}
+
 	return merged
 }
 

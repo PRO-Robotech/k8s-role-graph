@@ -1,6 +1,10 @@
 package rbacgraph
 
-import metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+import (
+	"fmt"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+)
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
@@ -13,16 +17,73 @@ type RoleGraphReview struct {
 	Status RoleGraphReviewStatus
 }
 
+// ---------- typed enums ----------
+
+type MatchMode string
+
+const (
+	MatchModeAny MatchMode = "any"
+	MatchModeAll MatchMode = "all"
+)
+
+type WildcardMode string
+
+const (
+	WildcardModeExpand WildcardMode = "expand"
+	WildcardModeExact  WildcardMode = "exact"
+)
+
+type PodPhaseMode string
+
+const (
+	PodPhaseModeActive  PodPhaseMode = "active"
+	PodPhaseModeAll     PodPhaseMode = "all"
+	PodPhaseModeRunning PodPhaseMode = "running"
+
+	DefaultMaxPodsPerSubject  = 20
+	DefaultMaxWorkloadsPerPod = 10
+)
+
+type GraphNodeType string
+
+const (
+	GraphNodeTypeRole               GraphNodeType = "role"
+	GraphNodeTypeClusterRole        GraphNodeType = "clusterRole"
+	GraphNodeTypeRoleBinding        GraphNodeType = "roleBinding"
+	GraphNodeTypeClusterRoleBinding GraphNodeType = "clusterRoleBinding"
+	GraphNodeTypeUser               GraphNodeType = "user"
+	GraphNodeTypeGroup              GraphNodeType = "group"
+	GraphNodeTypeServiceAccount     GraphNodeType = "serviceAccount"
+	GraphNodeTypePod                GraphNodeType = "pod"
+	GraphNodeTypeWorkload           GraphNodeType = "workload"
+	GraphNodeTypePodOverflow        GraphNodeType = "podOverflow"
+	GraphNodeTypeWorkloadOverflow   GraphNodeType = "workloadOverflow"
+)
+
+type GraphEdgeType string
+
+const (
+	GraphEdgeTypeAggregates GraphEdgeType = "aggregates"
+	GraphEdgeTypeGrants     GraphEdgeType = "grants"
+	GraphEdgeTypeSubjects   GraphEdgeType = "subjects"
+	GraphEdgeTypeRunsAs     GraphEdgeType = "runsAs"
+	GraphEdgeTypeOwnedBy    GraphEdgeType = "ownedBy"
+)
+
+// ---------- spec / status types ----------
+
 type RoleGraphReviewSpec struct {
 	Selector            Selector
-	MatchMode           string
+	MatchMode           MatchMode
+	WildcardMode        WildcardMode
 	IncludeRuleMetadata bool
 	NamespaceScope      NamespaceScope
 	IncludePods         bool
 	IncludeWorkloads    bool
-	PodPhaseMode        string
+	PodPhaseMode        PodPhaseMode
 	MaxPodsPerSubject   int
 	MaxWorkloadsPerPod  int
+	FilterPhantomAPIs   bool
 }
 
 type NamespaceScope struct {
@@ -57,7 +118,7 @@ type Graph struct {
 
 type GraphNode struct {
 	ID                 string
-	Type               string
+	Type               GraphNodeType
 	Name               string
 	Namespace          string
 	Aggregated         bool
@@ -75,7 +136,7 @@ type GraphEdge struct {
 	ID       string
 	From     string
 	To       string
-	Type     string
+	Type     GraphEdgeType
 	RuleRefs []RuleRef
 	Explain  string
 }
@@ -90,6 +151,9 @@ type RuleRef struct {
 	NonResourceURLs []string
 	SourceObjectUID string
 	SourceRuleIndex int
+	Phantom         bool
+	UnsupportedVerb bool
+	ExpandedRefs    []RuleRef
 }
 
 type ResourceMapRow struct {
@@ -99,4 +163,53 @@ type ResourceMapRow struct {
 	RoleCount    int
 	BindingCount int
 	SubjectCount int
+}
+
+// ---------- spec methods ----------
+// SYNC: Keep EnsureDefaults/Validate in sync with pkg/apis/rbacgraph/v1alpha1/types.go
+
+func (s *RoleGraphReviewSpec) EnsureDefaults() {
+	if s.MatchMode == "" {
+		s.MatchMode = MatchModeAny
+	}
+	if s.WildcardMode == "" {
+		s.WildcardMode = WildcardModeExpand
+	}
+	if s.PodPhaseMode == "" {
+		s.PodPhaseMode = PodPhaseModeActive
+	}
+	if s.MaxPodsPerSubject <= 0 {
+		s.MaxPodsPerSubject = DefaultMaxPodsPerSubject
+	}
+	if s.MaxWorkloadsPerPod <= 0 {
+		s.MaxWorkloadsPerPod = DefaultMaxWorkloadsPerPod
+	}
+}
+
+func (s RoleGraphReviewSpec) Validate() error {
+	if s.MatchMode != MatchModeAny && s.MatchMode != MatchModeAll {
+		return fmt.Errorf("invalid matchMode %q", s.MatchMode)
+	}
+	if s.WildcardMode != WildcardModeExpand && s.WildcardMode != WildcardModeExact {
+		return fmt.Errorf("invalid wildcardMode %q", s.WildcardMode)
+	}
+	podPhaseMode := s.PodPhaseMode
+	if podPhaseMode == "" {
+		podPhaseMode = PodPhaseModeActive
+	}
+	if podPhaseMode != PodPhaseModeActive && podPhaseMode != PodPhaseModeAll && podPhaseMode != PodPhaseModeRunning {
+		return fmt.Errorf("invalid podPhaseMode %q", s.PodPhaseMode)
+	}
+
+	return nil
+}
+
+func (s *RoleGraphReviewSpec) NormalizeRuntimeFlags() []string {
+	if s.IncludeWorkloads && !s.IncludePods {
+		s.IncludePods = true
+
+		return []string{"includeWorkloads=true requires includePods=true; includePods was enabled automatically"}
+	}
+
+	return nil
 }
