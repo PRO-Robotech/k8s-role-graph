@@ -36,6 +36,8 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		GraphEdge{}.OpenAPIModelName():                    schema_pkg_apis_rbacgraph_v1alpha1_GraphEdge(ref),
 		GraphNode{}.OpenAPIModelName():                    schema_pkg_apis_rbacgraph_v1alpha1_GraphNode(ref),
 		NamespaceScope{}.OpenAPIModelName():               schema_pkg_apis_rbacgraph_v1alpha1_NamespaceScope(ref),
+		NonResourceURLEntry{}.OpenAPIModelName():          schema_pkg_apis_rbacgraph_v1alpha1_NonResourceURLEntry(ref),
+		NonResourceURLList{}.OpenAPIModelName():           schema_pkg_apis_rbacgraph_v1alpha1_NonResourceURLList(ref),
 		ResourceMapRow{}.OpenAPIModelName():               schema_pkg_apis_rbacgraph_v1alpha1_ResourceMapRow(ref),
 		RoleGraphReview{}.OpenAPIModelName():              schema_pkg_apis_rbacgraph_v1alpha1_RoleGraphReview(ref),
 		RoleGraphReviewSpec{}.OpenAPIModelName():          schema_pkg_apis_rbacgraph_v1alpha1_RoleGraphReviewSpec(ref),
@@ -364,6 +366,104 @@ func schema_pkg_apis_rbacgraph_v1alpha1_NamespaceScope(ref common.ReferenceCallb
 				},
 			},
 		},
+	}
+}
+
+func schema_pkg_apis_rbacgraph_v1alpha1_NonResourceURLEntry(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "NonResourceURLEntry represents a single non-resource URL with its verbs and source roles.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"url": {
+						SchemaProps: spec.SchemaProps{
+							Default: "",
+							Type:    []string{"string"},
+							Format:  "",
+						},
+					},
+					"verbs": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: "",
+										Type:    []string{"string"},
+										Format:  "",
+									},
+								},
+							},
+						},
+					},
+					"roles": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: "",
+										Type:    []string{"string"},
+										Format:  "",
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"url", "verbs", "roles"},
+			},
+		},
+	}
+}
+
+func schema_pkg_apis_rbacgraph_v1alpha1_NonResourceURLList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "NonResourceURLList is a list of non-resource URLs found across ClusterRole rules.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref(v1.ListMeta{}.OpenAPIModelName()),
+						},
+					},
+					"items": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref(NonResourceURLEntry{}.OpenAPIModelName()),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"items"},
+			},
+		},
+		Dependencies: []string{
+			NonResourceURLEntry{}.OpenAPIModelName(), v1.ListMeta{}.OpenAPIModelName()},
 	}
 }
 

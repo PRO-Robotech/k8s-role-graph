@@ -165,6 +165,25 @@ type ResourceMapRow struct {
 	SubjectCount int
 }
 
+// ---------- NonResourceURL types ----------
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// NonResourceURLList is a list of non-resource URLs found across ClusterRole rules.
+type NonResourceURLList struct {
+	metav1.TypeMeta
+	metav1.ListMeta
+
+	Items []NonResourceURLEntry
+}
+
+// NonResourceURLEntry represents a single non-resource URL with its verbs and source roles.
+type NonResourceURLEntry struct {
+	URL   string
+	Verbs []string
+	Roles []string
+}
+
 // ---------- spec methods ----------
 // SYNC: Keep EnsureDefaults/Validate in sync with pkg/apis/rbacgraph/v1alpha1/types.go
 

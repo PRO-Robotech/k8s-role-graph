@@ -17,6 +17,7 @@ var (
 func addKnownTypes(scheme *runtime.Scheme) error {
 	scheme.AddKnownTypes(SchemeGroupVersion,
 		&RoleGraphReview{},
+		&NonResourceURLList{},
 	)
 
 	return nil

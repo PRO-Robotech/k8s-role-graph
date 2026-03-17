@@ -175,6 +175,37 @@ type ResourceMapRow struct {
 	SubjectCount int    `json:"subjectCount"`
 }
 
+// ---------- NonResourceURL types ----------
+
+const (
+	NonResourceURLListKind     = "NonResourceURLList"
+	NonResourceURLListResource = "nonresourceurls"
+)
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// NonResourceURLList is a list of non-resource URLs found across ClusterRole rules.
+type NonResourceURLList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty"`
+
+	Items []NonResourceURLEntry `json:"items"`
+}
+
+// NonResourceURLEntry represents a single non-resource URL with its verbs and source roles.
+type NonResourceURLEntry struct {
+	URL   string   `json:"url"`
+	Verbs []string `json:"verbs"`
+	Roles []string `json:"roles"`
+}
+
+func (NonResourceURLList) OpenAPIModelName() string {
+	return openAPIPrefix + "NonResourceURLList"
+}
+func (NonResourceURLEntry) OpenAPIModelName() string {
+	return openAPIPrefix + "NonResourceURLEntry"
+}
+
 func (r *RoleGraphReview) EnsureDefaults() {
 	if strings.TrimSpace(r.APIVersion) == "" {
 		r.APIVersion = APIVersionValue

@@ -14,6 +14,7 @@ import (
 	"k8s-role-graph/internal/authz"
 	"k8s-role-graph/internal/engine"
 	"k8s-role-graph/internal/indexer"
+	nonresourceurlstorage "k8s-role-graph/internal/registry/nonresourceurl"
 	reviewstorage "k8s-role-graph/internal/registry/rolegraphreview"
 	"k8s-role-graph/pkg/apis/rbacgraph"
 	"k8s-role-graph/pkg/apis/rbacgraph/v1alpha1"
@@ -67,6 +68,7 @@ func (c CompletedConfig) New() (*RbacGraphServer, error) {
 	apiGroupInfo := genericapiserver.NewDefaultAPIGroupInfo(rbacgraph.GroupName, Scheme, ParameterCodec, Codecs)
 	v1alpha1storage := map[string]rest.Storage{}
 	v1alpha1storage["rolegraphreviews"] = reviewstorage.NewREST(c.Engine, c.Indexer, Scheme, c.AuthzResolver)
+	v1alpha1storage["nonresourceurls"] = nonresourceurlstorage.NewREST(c.Indexer)
 	apiGroupInfo.VersionedResourcesStorageMap[v1alpha1.Version] = v1alpha1storage
 
 	if err := s.GenericAPIServer.InstallAPIGroup(&apiGroupInfo); err != nil {
