@@ -18,6 +18,7 @@ func makeNamespaceFilter(namespaces []string) map[string]struct{} {
 	if len(filter) == 0 {
 		return nil
 	}
+
 	return filter
 }
 
@@ -29,6 +30,7 @@ func allowNamespace(filter map[string]struct{}, namespace string, strict bool) b
 		return !strict
 	}
 	_, ok := filter[namespace]
+
 	return ok
 }
 
@@ -42,11 +44,13 @@ func filterBindingsByNamespace(filter map[string]struct{}, strict bool, bindings
 			if !strict {
 				out = append(out, binding)
 			}
+
 			continue
 		}
 		if _, ok := filter[binding.Namespace]; ok {
 			out = append(out, binding)
 		}
 	}
+
 	return out
 }

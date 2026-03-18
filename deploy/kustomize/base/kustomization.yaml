@@ -11,3 +11,5 @@ resources:
   - service-apiserver.yaml
   - web.yaml
   - apiservice.yaml
+  - pdb.yaml
+  - networkpolicy.yaml

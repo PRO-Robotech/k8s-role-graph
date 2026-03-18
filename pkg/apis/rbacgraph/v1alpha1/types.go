@@ -24,6 +24,14 @@ const (
 )
 
 // +enum
+type WildcardMode string
+
+const (
+	WildcardModeExpand WildcardMode = "expand"
+	WildcardModeExact  WildcardMode = "exact"
+)
+
+// +enum
 type PodPhaseMode string
 
 const (
@@ -77,6 +85,7 @@ type RoleGraphReview struct {
 type RoleGraphReviewSpec struct {
 	Selector            Selector       `json:"selector,omitempty"`
 	MatchMode           MatchMode      `json:"matchMode,omitempty"`
+	WildcardMode        WildcardMode   `json:"wildcardMode,omitempty"`
 	IncludeRuleMetadata bool           `json:"includeRuleMetadata,omitempty"`
 	NamespaceScope      NamespaceScope `json:"namespaceScope,omitempty"`
 	IncludePods         bool           `json:"includePods,omitempty"`
@@ -84,6 +93,7 @@ type RoleGraphReviewSpec struct {
 	PodPhaseMode        PodPhaseMode   `json:"podPhaseMode,omitempty"`
 	MaxPodsPerSubject   int            `json:"maxPodsPerSubject,omitempty"`
 	MaxWorkloadsPerPod  int            `json:"maxWorkloadsPerPod,omitempty"`
+	FilterPhantomAPIs   bool           `json:"filterPhantomAPIs,omitempty"`
 }
 
 type NamespaceScope struct {
@@ -142,15 +152,18 @@ type GraphEdge struct {
 }
 
 type RuleRef struct {
-	APIVersion      string   `json:"apiVersion,omitempty"`
-	APIGroup        string   `json:"apiGroup,omitempty"`
-	Resource        string   `json:"resource,omitempty"`
-	Subresource     string   `json:"subresource,omitempty"`
-	Verb            string   `json:"verb,omitempty"`
-	ResourceNames   []string `json:"resourceNames,omitempty"`
-	NonResourceURLs []string `json:"nonResourceURLs,omitempty"`
-	SourceObjectUID string   `json:"sourceObjectUID,omitempty"`
-	SourceRuleIndex int      `json:"sourceRuleIndex,omitempty"`
+	APIVersion      string    `json:"apiVersion,omitempty"`
+	APIGroup        string    `json:"apiGroup,omitempty"`
+	Resource        string    `json:"resource,omitempty"`
+	Subresource     string    `json:"subresource,omitempty"`
+	Verb            string    `json:"verb,omitempty"`
+	ResourceNames   []string  `json:"resourceNames,omitempty"`
+	NonResourceURLs []string  `json:"nonResourceURLs,omitempty"`
+	SourceObjectUID string    `json:"sourceObjectUID,omitempty"`
+	SourceRuleIndex int       `json:"sourceRuleIndex,omitempty"`
+	Phantom         bool      `json:"phantom,omitempty"`
+	UnsupportedVerb bool      `json:"unsupportedVerb,omitempty"`
+	ExpandedRefs    []RuleRef `json:"expandedRefs,omitempty"`
 }
 
 type ResourceMapRow struct {
@@ -160,6 +173,37 @@ type ResourceMapRow struct {
 	RoleCount    int    `json:"roleCount"`
 	BindingCount int    `json:"bindingCount"`
 	SubjectCount int    `json:"subjectCount"`
+}
+
+// ---------- NonResourceURL types ----------
+
+const (
+	NonResourceURLListKind     = "NonResourceURLList"
+	NonResourceURLListResource = "nonresourceurls"
+)
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// NonResourceURLList is a list of non-resource URLs found across ClusterRole rules.
+type NonResourceURLList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty"`
+
+	Items []NonResourceURLEntry `json:"items"`
+}
+
+// NonResourceURLEntry represents a single non-resource URL with its verbs and source roles.
+type NonResourceURLEntry struct {
+	URL   string   `json:"url"`
+	Verbs []string `json:"verbs"`
+	Roles []string `json:"roles"`
+}
+
+func (NonResourceURLList) OpenAPIModelName() string {
+	return openAPIPrefix + "NonResourceURLList"
+}
+func (NonResourceURLEntry) OpenAPIModelName() string {
+	return openAPIPrefix + "NonResourceURLEntry"
 }
 
 func (r *RoleGraphReview) EnsureDefaults() {
@@ -172,12 +216,14 @@ func (r *RoleGraphReview) EnsureDefaults() {
 	r.Spec.EnsureDefaults()
 }
 
+// SYNC: Keep EnsureDefaults/Validate in sync with pkg/apis/rbacgraph/types.go
+
 func (s *RoleGraphReviewSpec) EnsureDefaults() {
 	if s.MatchMode == "" {
 		s.MatchMode = MatchModeAny
 	}
-	if !s.IncludeRuleMetadata {
-		s.IncludeRuleMetadata = true
+	if s.WildcardMode == "" {
+		s.WildcardMode = WildcardModeExpand
 	}
 	if s.PodPhaseMode == "" {
 		s.PodPhaseMode = PodPhaseModeActive
@@ -194,6 +240,9 @@ func (s RoleGraphReviewSpec) Validate() error {
 	if s.MatchMode != MatchModeAny && s.MatchMode != MatchModeAll {
 		return fmt.Errorf("invalid matchMode %q", s.MatchMode)
 	}
+	if s.WildcardMode != WildcardModeExpand && s.WildcardMode != WildcardModeExact {
+		return fmt.Errorf("invalid wildcardMode %q", s.WildcardMode)
+	}
 	podPhaseMode := s.PodPhaseMode
 	if podPhaseMode == "" {
 		podPhaseMode = PodPhaseModeActive
@@ -201,21 +250,37 @@ func (s RoleGraphReviewSpec) Validate() error {
 	if podPhaseMode != PodPhaseModeActive && podPhaseMode != PodPhaseModeAll && podPhaseMode != PodPhaseModeRunning {
 		return fmt.Errorf("invalid podPhaseMode %q", s.PodPhaseMode)
 	}
+
 	return nil
 }
 
 func (s *RoleGraphReviewSpec) NormalizeRuntimeFlags() []string {
 	if s.IncludeWorkloads && !s.IncludePods {
 		s.IncludePods = true
+
 		return []string{"includeWorkloads=true requires includePods=true; includePods was enabled automatically"}
 	}
+
 	return nil
 }
 
-func (s Selector) HasResourceQuery() bool {
-	return len(s.Resources) > 0 || len(s.APIGroups) > 0 || len(s.Verbs) > 0 || len(s.ResourceNames) > 0
-}
+// ---------- OpenAPIModelName ----------
+//
+// The Kubernetes DefinitionNamer converts Go paths (slashes) to dot-separated
+// names. Types must implement OpenAPIModelName to match, otherwise $ref pointers
+// contain JSON-Pointer-escaped slashes (~1) that the field manager cannot resolve.
 
-func (s Selector) HasNonResourceQuery() bool {
-	return len(s.NonResourceURLs) > 0
+const openAPIPrefix = "k8s-role-graph.pkg.apis.rbacgraph.v1alpha1."
+
+func (RoleGraphReview) OpenAPIModelName() string     { return openAPIPrefix + "RoleGraphReview" }
+func (RoleGraphReviewSpec) OpenAPIModelName() string { return openAPIPrefix + "RoleGraphReviewSpec" }
+func (RoleGraphReviewStatus) OpenAPIModelName() string {
+	return openAPIPrefix + "RoleGraphReviewStatus"
 }
+func (Selector) OpenAPIModelName() string       { return openAPIPrefix + "Selector" }
+func (NamespaceScope) OpenAPIModelName() string { return openAPIPrefix + "NamespaceScope" }
+func (Graph) OpenAPIModelName() string          { return openAPIPrefix + "Graph" }
+func (GraphNode) OpenAPIModelName() string      { return openAPIPrefix + "GraphNode" }
+func (GraphEdge) OpenAPIModelName() string      { return openAPIPrefix + "GraphEdge" }
+func (RuleRef) OpenAPIModelName() string        { return openAPIPrefix + "RuleRef" }
+func (ResourceMapRow) OpenAPIModelName() string { return openAPIPrefix + "ResourceMapRow" }

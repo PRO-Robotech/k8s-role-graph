@@ -4,8 +4,11 @@ import "k8s.io/apimachinery/pkg/runtime"
 
 func RegisterDefaults(scheme *runtime.Scheme) error {
 	scheme.AddTypeDefaultingFunc(&RoleGraphReview{}, func(obj interface{}) {
-		SetObjectDefaults_RoleGraphReview(obj.(*RoleGraphReview))
+		if review, ok := obj.(*RoleGraphReview); ok {
+			SetObjectDefaults_RoleGraphReview(review)
+		}
 	})
+
 	return nil
 }
 

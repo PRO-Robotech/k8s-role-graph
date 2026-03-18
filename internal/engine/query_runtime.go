@@ -11,26 +11,24 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 
 	"k8s-role-graph/internal/indexer"
-	api "k8s-role-graph/pkg/apis/rbacgraph/v1alpha1"
+	api "k8s-role-graph/pkg/apis/rbacgraph"
 )
 
+//nolint:gocognit,gocyclo,funlen // runtime chain expansion has necessary branching
 func (qc *queryContext) expandRuntimeChain() {
 	if !qc.spec.IncludePods {
 		return
 	}
 	for _, subject := range sortedServiceAccounts(qc.saSubjects) {
 		if subject.Namespace == "" {
-			appendUniqueString(
-				&qc.status.Warnings,
-				qc.warningSeen,
-				fmt.Sprintf("subject %s has empty namespace and was skipped for runtime expansion", subject.SubjectNodeID),
-			)
+			qc.addWarning(fmt.Sprintf("subject %s has empty namespace and was skipped for runtime expansion", subject.SubjectNodeID))
+
 			continue
 		}
 		if !allowNamespace(qc.namespaceFilter, subject.Namespace, qc.namespaceStrict) {
 			continue
 		}
-		podRecords := filterPods(qc.snapshot.PodsByServiceAccount[subject.ServiceAccountKey()], qc.spec.PodPhaseMode, qc.namespaceFilter, qc.namespaceStrict)
+		podRecords := qc.filterPods(qc.snapshot.PodsByServiceAccount[subject.ServiceAccountKey()])
 		if len(podRecords) == 0 {
 			continue
 		}
@@ -41,7 +39,7 @@ func (qc *queryContext) expandRuntimeChain() {
 		}
 		for _, pod := range visiblePods {
 			podNodeIDValue := podNodeID(pod)
-			if addNodeIfMissing(&qc.status.Graph.Nodes, qc.nodeSeen, api.GraphNode{
+			if qc.addNodeIfMissing(api.GraphNode{
 				ID:        podNodeIDValue,
 				Type:      api.GraphNodeTypePod,
 				Name:      pod.Name,
@@ -50,7 +48,7 @@ func (qc *queryContext) expandRuntimeChain() {
 			}) {
 				qc.podSeen[podNodeIDValue] = struct{}{}
 			}
-			appendEdgeIfMissing(&qc.status.Graph.Edges, qc.edgeSeen, api.GraphEdge{
+			qc.appendEdgeIfMissing(api.GraphEdge{
 				ID:      edgeIDFor(subject.SubjectNodeID, podNodeIDValue, api.GraphEdgeTypeRunsAs),
 				From:    subject.SubjectNodeID,
 				To:      podNodeIDValue,
@@ -62,7 +60,7 @@ func (qc *queryContext) expandRuntimeChain() {
 				continue
 			}
 
-			workloadChain := resolveWorkloadChain(qc.snapshot, pod, qc.warningSeen, &qc.status.Warnings)
+			workloadChain := qc.resolveWorkloadChain(pod)
 			visibleChain := workloadChain
 			if len(visibleChain) > qc.spec.MaxWorkloadsPerPod {
 				visibleChain = visibleChain[:qc.spec.MaxWorkloadsPerPod]
@@ -71,7 +69,7 @@ func (qc *queryContext) expandRuntimeChain() {
 			parentID := podNodeIDValue
 			for _, workload := range visibleChain {
 				workloadNodeIDValue := workloadNodeID(workload)
-				if addNodeIfMissing(&qc.status.Graph.Nodes, qc.nodeSeen, api.GraphNode{
+				if qc.addNodeIfMissing(api.GraphNode{
 					ID:           workloadNodeIDValue,
 					Type:         api.GraphNodeTypeWorkload,
 					Name:         workload.Name,
@@ -80,7 +78,7 @@ func (qc *queryContext) expandRuntimeChain() {
 				}) {
 					qc.workloadSeen[workloadNodeIDValue] = struct{}{}
 				}
-				appendEdgeIfMissing(&qc.status.Graph.Edges, qc.edgeSeen, api.GraphEdge{
+				qc.appendEdgeIfMissing(api.GraphEdge{
 					ID:      edgeIDFor(parentID, workloadNodeIDValue, api.GraphEdgeTypeOwnedBy),
 					From:    parentID,
 					To:      workloadNodeIDValue,
@@ -93,7 +91,7 @@ func (qc *queryContext) expandRuntimeChain() {
 			hiddenWorkloads := len(workloadChain) - len(visibleChain)
 			if hiddenWorkloads > 0 {
 				overflowID := workloadOverflowNodeID(podNodeIDValue)
-				addNodeIfMissing(&qc.status.Graph.Nodes, qc.nodeSeen, api.GraphNode{
+				qc.addNodeIfMissing(api.GraphNode{
 					ID:          overflowID,
 					Type:        api.GraphNodeTypeWorkloadOverflow,
 					Name:        fmt.Sprintf("+%d workloads", hiddenWorkloads),
@@ -101,7 +99,7 @@ func (qc *queryContext) expandRuntimeChain() {
 					Synthetic:   true,
 					HiddenCount: hiddenWorkloads,
 				})
-				appendEdgeIfMissing(&qc.status.Graph.Edges, qc.edgeSeen, api.GraphEdge{
+				qc.appendEdgeIfMissing(api.GraphEdge{
 					ID:      edgeIDFor(parentID, overflowID, api.GraphEdgeTypeOwnedBy),
 					From:    parentID,
 					To:      overflowID,
@@ -114,7 +112,7 @@ func (qc *queryContext) expandRuntimeChain() {
 		hiddenPods := len(podRecords) - len(visiblePods)
 		if hiddenPods > 0 {
 			overflowID := podOverflowNodeID(subject.SubjectNodeID)
-			addNodeIfMissing(&qc.status.Graph.Nodes, qc.nodeSeen, api.GraphNode{
+			qc.addNodeIfMissing(api.GraphNode{
 				ID:          overflowID,
 				Type:        api.GraphNodeTypePodOverflow,
 				Name:        fmt.Sprintf("+%d pods", hiddenPods),
@@ -122,7 +120,7 @@ func (qc *queryContext) expandRuntimeChain() {
 				Synthetic:   true,
 				HiddenCount: hiddenPods,
 			})
-			appendEdgeIfMissing(&qc.status.Graph.Edges, qc.edgeSeen, api.GraphEdge{
+			qc.appendEdgeIfMissing(api.GraphEdge{
 				ID:      edgeIDFor(subject.SubjectNodeID, overflowID, api.GraphEdgeTypeRunsAs),
 				From:    subject.SubjectNodeID,
 				To:      overflowID,
@@ -146,7 +144,7 @@ func (s subjectServiceAccount) ServiceAccountKey() indexer.ServiceAccountKey {
 	}
 }
 
-func trackServiceAccountSubject(subjects map[string]subjectServiceAccount, subjectNodeID string, subject rbacv1.Subject, bindingNamespace string) {
+func (qc *queryContext) trackServiceAccountSubject(subjectNodeID string, subject rbacv1.Subject, bindingNamespace string) {
 	if subjectType(subject.Kind) != api.GraphNodeTypeServiceAccount {
 		return
 	}
@@ -154,7 +152,7 @@ func trackServiceAccountSubject(subjects map[string]subjectServiceAccount, subje
 	if namespace == "" {
 		namespace = strings.TrimSpace(bindingNamespace)
 	}
-	subjects[subjectNodeID] = subjectServiceAccount{
+	qc.saSubjects[subjectNodeID] = subjectServiceAccount{
 		SubjectNodeID:      subjectNodeID,
 		Namespace:          namespace,
 		ServiceAccountName: subject.Name,
@@ -176,12 +174,14 @@ func sortedServiceAccounts(subjects map[string]subjectServiceAccount) []subjectS
 		if out[i].ServiceAccountName != out[j].ServiceAccountName {
 			return out[i].ServiceAccountName < out[j].ServiceAccountName
 		}
+
 		return out[i].SubjectNodeID < out[j].SubjectNodeID
 	})
+
 	return out
 }
 
-func filterPods(pods []*indexer.PodRecord, phaseMode api.PodPhaseMode, namespaceFilter map[string]struct{}, namespaceStrict bool) []*indexer.PodRecord {
+func (qc *queryContext) filterPods(pods []*indexer.PodRecord) []*indexer.PodRecord {
 	if len(pods) == 0 {
 		return nil
 	}
@@ -190,14 +190,15 @@ func filterPods(pods []*indexer.PodRecord, phaseMode api.PodPhaseMode, namespace
 		if pod == nil {
 			continue
 		}
-		if !allowNamespace(namespaceFilter, pod.Namespace, namespaceStrict) {
+		if !allowNamespace(qc.namespaceFilter, pod.Namespace, qc.namespaceStrict) {
 			continue
 		}
-		if !podPhaseMatches(pod.Phase, phaseMode) {
+		if !podPhaseMatches(pod.Phase, qc.spec.PodPhaseMode) {
 			continue
 		}
 		out = append(out, pod)
 	}
+
 	return out
 }
 
@@ -212,22 +213,18 @@ func podPhaseMatches(phase corev1.PodPhase, mode api.PodPhaseMode) bool {
 	}
 }
 
-func resolveWorkloadChain(
-	snapshot *indexer.Snapshot,
-	pod *indexer.PodRecord,
-	warningSeen map[string]struct{},
-	warnings *[]string,
-) []*indexer.WorkloadRecord {
+func (qc *queryContext) addWarning(msg string) {
+	appendUniqueString(&qc.status.Warnings, qc.warningSeen, msg)
+}
+
+func (qc *queryContext) resolveWorkloadChain(pod *indexer.PodRecord) []*indexer.WorkloadRecord {
 	if pod == nil {
 		return nil
 	}
 	owner, ok := chooseOwnerReference(pod.OwnerReferences)
 	if !ok {
-		appendUniqueString(
-			warnings,
-			warningSeen,
-			fmt.Sprintf("pod %s/%s has no owner reference; workload chain cannot be expanded", pod.Namespace, pod.Name),
-		)
+		qc.addWarning(fmt.Sprintf("pod %s/%s has no owner reference; workload chain cannot be expanded", pod.Namespace, pod.Name))
+
 		return nil
 	}
 
@@ -235,39 +232,30 @@ func resolveWorkloadChain(
 	chain := make([]*indexer.WorkloadRecord, 0, maxOwnerDepth)
 	seenUIDs := make(map[types.UID]struct{}, maxOwnerDepth)
 	currentOwner := owner
-	for depth := 0; depth < maxOwnerDepth; depth++ {
+	for range maxOwnerDepth {
 		if currentOwner.UID == "" {
-			appendUniqueString(
-				warnings,
-				warningSeen,
-				fmt.Sprintf("pod %s/%s owner reference %s/%s has empty UID", pod.Namespace, pod.Name, currentOwner.Kind, currentOwner.Name),
-			)
+			qc.addWarning(fmt.Sprintf("pod %s/%s owner reference %s/%s has empty UID", pod.Namespace, pod.Name, currentOwner.Kind, currentOwner.Name))
+
 			return chain
 		}
 		if _, exists := seenUIDs[currentOwner.UID]; exists {
-			appendUniqueString(
-				warnings,
-				warningSeen,
-				fmt.Sprintf("pod %s/%s owner chain has cycle at UID %s", pod.Namespace, pod.Name, currentOwner.UID),
-			)
+			qc.addWarning(fmt.Sprintf("pod %s/%s owner chain has cycle at UID %s", pod.Namespace, pod.Name, currentOwner.UID))
+
 			return chain
 		}
 		seenUIDs[currentOwner.UID] = struct{}{}
 
-		workload, exists := snapshot.WorkloadsByUID[currentOwner.UID]
+		workload, exists := qc.snapshot.WorkloadsByUID[currentOwner.UID]
 		if !exists {
-			appendUniqueString(
-				warnings,
-				warningSeen,
-				fmt.Sprintf(
-					"pod %s/%s owner %s/%s (%s) not found in workload cache",
-					pod.Namespace,
-					pod.Name,
-					currentOwner.Kind,
-					currentOwner.Name,
-					currentOwner.UID,
-				),
-			)
+			qc.addWarning(fmt.Sprintf(
+				"pod %s/%s owner %s/%s (%s) not found in workload cache",
+				pod.Namespace,
+				pod.Name,
+				currentOwner.Kind,
+				currentOwner.Name,
+				currentOwner.UID,
+			))
+
 			return chain
 		}
 		chain = append(chain, workload)
@@ -279,17 +267,17 @@ func resolveWorkloadChain(
 		currentOwner = nextOwner
 	}
 
-	appendUniqueString(
-		warnings,
-		warningSeen,
-		fmt.Sprintf("pod %s/%s owner chain was truncated at depth 8", pod.Namespace, pod.Name),
-	)
+	qc.addWarning(fmt.Sprintf("pod %s/%s owner chain was truncated at depth %d", pod.Namespace, pod.Name, maxOwnerDepth))
+
 	return chain
 }
 
 func chooseOwnerReference(ownerReferences []metav1.OwnerReference) (metav1.OwnerReference, bool) {
 	if len(ownerReferences) == 0 {
 		return metav1.OwnerReference{}, false
+	}
+	if len(ownerReferences) == 1 {
+		return ownerReferences[0], true
 	}
 	candidates := append([]metav1.OwnerReference(nil), ownerReferences...)
 	sort.Slice(candidates, func(i, j int) bool {
@@ -300,8 +288,10 @@ func chooseOwnerReference(ownerReferences []metav1.OwnerReference) (metav1.Owner
 		if leftController != rightController {
 			return leftController
 		}
+
 		return ownerRefSortKey(left) < ownerRefSortKey(right)
 	})
+
 	return candidates[0], true
 }
 

@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"k8s-role-graph/internal/indexer"
-	api "k8s-role-graph/pkg/apis/rbacgraph/v1alpha1"
+	api "k8s-role-graph/pkg/apis/rbacgraph"
 )
 
 type resourceAccumulator struct {
@@ -25,8 +25,13 @@ type resourceRowKey struct {
 	nonResourceJoined string
 }
 
-func accumulateResourceRows(rows map[resourceRowKey]*resourceAccumulator, refs []api.RuleRef, roleID indexer.RoleID, bindingID, subjectID string) {
-	for _, ref := range refs {
+func (qc *queryContext) accumulateResourceRows(refs []api.RuleRef, roleID indexer.RoleID, bindingID, subjectID string) {
+	accumulateResourceRowsInto(qc.resourceRows, refs, roleID, bindingID, subjectID)
+}
+
+func accumulateResourceRowsInto(rows map[resourceRowKey]*resourceAccumulator, refs []api.RuleRef, roleID indexer.RoleID, bindingID, subjectID string) {
+	for i := range refs {
+		ref := &refs[i]
 		key := resourceRowKey{
 			apiGroup:    ref.APIGroup,
 			resource:    ref.Resource,
@@ -86,7 +91,9 @@ func collapseResourceRows(rows map[resourceRowKey]*resourceAccumulator) []api.Re
 		if out[i].Resource != out[j].Resource {
 			return out[i].Resource < out[j].Resource
 		}
+
 		return out[i].Verb < out[j].Verb
 	})
+
 	return out
 }

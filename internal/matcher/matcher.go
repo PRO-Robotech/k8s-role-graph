@@ -5,7 +5,7 @@ import (
 
 	rbacv1 "k8s.io/api/rbac/v1"
 
-	api "k8s-role-graph/pkg/apis/rbacgraph/v1alpha1"
+	api "k8s-role-graph/pkg/apis/rbacgraph"
 )
 
 type MatchResult struct {
@@ -13,29 +13,43 @@ type MatchResult struct {
 	RuleRefs []api.RuleRef
 }
 
-func MatchRule(rule rbacv1.PolicyRule, selector api.Selector, mode api.MatchMode, sourceUID string, ruleIndex int) MatchResult {
-	mode = normalizeMode(mode)
-	resourceQuery := len(selector.Resources) > 0 || len(selector.APIGroups) > 0 || len(selector.ResourceNames) > 0
-	nonResourceQuery := len(selector.NonResourceURLs) > 0
+type MatchInput struct {
+	Rule         rbacv1.PolicyRule
+	Selector     api.Selector
+	Mode         api.MatchMode
+	WildcardMode api.WildcardMode
+	SourceUID    string
+	RuleIndex    int
+}
 
-	resourceRefs, resourceMatched := matchResourceRule(rule, selector, mode, sourceUID, ruleIndex)
-	nonResourceRefs, nonResourceMatched := matchNonResourceRule(rule, selector, mode, sourceUID, ruleIndex)
+//nolint:gocyclo // matching logic handles resource + non-resource + combined cases
+func MatchRule(in MatchInput) MatchResult {
+	in.Mode = normalizeMode(in.Mode)
+	in.WildcardMode = normalizeWildcardMode(in.WildcardMode)
+	resourceQuery := len(in.Selector.Resources) > 0 || len(in.Selector.APIGroups) > 0 || len(in.Selector.ResourceNames) > 0
+	nonResourceQuery := len(in.Selector.NonResourceURLs) > 0
+
+	resourceRefs, resourceMatched := matchResourceRule(in)
+	nonResourceRefs, nonResourceMatched := matchNonResourceRule(in)
 
 	switch {
 	case resourceQuery && nonResourceQuery:
 		if resourceMatched && nonResourceMatched {
 			return MatchResult{Matched: true, RuleRefs: append(resourceRefs, nonResourceRefs...)}
 		}
+
 		return MatchResult{}
 	case resourceQuery:
 		if resourceMatched {
 			return MatchResult{Matched: true, RuleRefs: resourceRefs}
 		}
+
 		return MatchResult{}
 	case nonResourceQuery:
 		if nonResourceMatched {
 			return MatchResult{Matched: true, RuleRefs: nonResourceRefs}
 		}
+
 		return MatchResult{}
 	default:
 		if resourceMatched {
@@ -44,60 +58,71 @@ func MatchRule(rule rbacv1.PolicyRule, selector api.Selector, mode api.MatchMode
 		if nonResourceMatched {
 			return MatchResult{Matched: true, RuleRefs: nonResourceRefs}
 		}
+
 		return MatchResult{}
 	}
 }
 
-func matchResourceRule(rule rbacv1.PolicyRule, selector api.Selector, mode api.MatchMode, sourceUID string, ruleIndex int) ([]api.RuleRef, bool) {
-	if len(rule.Resources) == 0 {
+func matchResourceRule(in MatchInput) ([]api.RuleRef, bool) {
+	if len(in.Rule.Resources) == 0 {
 		return nil, false
 	}
 
-	groupsRequested := ensureWildcard(selector.APIGroups)
-	resourcesRequested := ensureWildcard(selector.Resources)
-	verbsRequested := ensureWildcard(selector.Verbs)
+	isExact := in.WildcardMode == api.WildcardModeExact
 
-	groupMatches := matchRequested(groupsRequested, rule.APIGroups, mode, exactOrWildcard)
-	if len(groupMatches) == 0 {
+	var groupFn, verbFn, resFn func(string, string) bool
+	if isExact {
+		groupFn = exactMatchCI
+		resFn = exactMatchCI
+		verbFn = exactMatchCI
+	} else {
+		groupFn = exactOrWildcard
+		resFn = resourceWildcardMatch
+		verbFn = exactOrWildcard
+	}
+
+	groupsRequested := ensureWildcardForMode(in.Selector.APIGroups, isExact)
+	resourcesRequested := ensureWildcardForMode(in.Selector.Resources, isExact)
+	verbsRequested := ensureWildcardForMode(in.Selector.Verbs, isExact)
+
+	// nil = no constraint in exact mode → use all rule values directly
+	var ok bool
+	if groupsRequested, ok = resolveField(groupsRequested, in.Rule.APIGroups, in.Selector.APIGroups, in.Mode, groupFn); !ok {
 		return nil, false
 	}
-	if len(selector.APIGroups) == 0 {
-		groupMatches = append([]string(nil), rule.APIGroups...)
-	}
-
-	resourceMatches := matchRequested(resourcesRequested, rule.Resources, mode, resourceWildcardMatch)
-	if len(resourceMatches) == 0 {
+	if resourcesRequested, ok = resolveField(resourcesRequested, in.Rule.Resources, in.Selector.Resources, in.Mode, resFn); !ok {
 		return nil, false
 	}
-	if len(selector.Resources) == 0 {
-		resourceMatches = append([]string(nil), rule.Resources...)
-	}
-
-	verbMatches := matchRequested(verbsRequested, rule.Verbs, mode, exactOrWildcard)
-	if len(verbMatches) == 0 {
-		return nil, false
-	}
-	if len(selector.Verbs) == 0 {
-		verbMatches = append([]string(nil), rule.Verbs...)
-	}
-
-	if !matchResourceNames(selector.ResourceNames, rule.ResourceNames, mode) {
+	if verbsRequested, ok = resolveField(verbsRequested, in.Rule.Verbs, in.Selector.Verbs, in.Mode, verbFn); !ok {
 		return nil, false
 	}
 
-	refs := make([]api.RuleRef, 0, len(groupMatches)*len(resourceMatches)*len(verbMatches))
-	for _, g := range groupMatches {
-		for _, r := range resourceMatches {
+	if !matchResourceNames(in.Selector.ResourceNames, in.Rule.ResourceNames, in.Mode) {
+		return nil, false
+	}
+
+	// Only include resourceNames in the RuleRef when the rule itself restricts
+	// by name. When the rule has no name restriction (= all names allowed),
+	// leave empty to avoid echoing the query's resourceNames as if the role
+	// specifically grants access to those names.
+	var ruleRefNames []string
+	if len(in.Rule.ResourceNames) > 0 {
+		ruleRefNames = copyStrings(in.Selector.ResourceNames)
+	}
+
+	refs := make([]api.RuleRef, 0, len(groupsRequested)*len(resourcesRequested)*len(verbsRequested))
+	for _, g := range groupsRequested {
+		for _, r := range resourcesRequested {
 			resource, subresource := splitResource(r)
-			for _, v := range verbMatches {
+			for _, v := range verbsRequested {
 				refs = append(refs, api.RuleRef{
 					APIGroup:        g,
 					Resource:        resource,
 					Subresource:     subresource,
 					Verb:            v,
-					ResourceNames:   append([]string(nil), selector.ResourceNames...),
-					SourceObjectUID: sourceUID,
-					SourceRuleIndex: ruleIndex,
+					ResourceNames:   ruleRefNames,
+					SourceObjectUID: in.SourceUID,
+					SourceRuleIndex: in.RuleIndex,
 				})
 			}
 		}
@@ -106,37 +131,41 @@ func matchResourceRule(rule rbacv1.PolicyRule, selector api.Selector, mode api.M
 	return refs, true
 }
 
-func matchNonResourceRule(rule rbacv1.PolicyRule, selector api.Selector, mode api.MatchMode, sourceUID string, ruleIndex int) ([]api.RuleRef, bool) {
-	if len(rule.NonResourceURLs) == 0 {
+func matchNonResourceRule(in MatchInput) ([]api.RuleRef, bool) {
+	if len(in.Rule.NonResourceURLs) == 0 {
 		return nil, false
 	}
 
-	requestedURLs := ensureWildcard(selector.NonResourceURLs)
-	urlMatches := matchRequested(requestedURLs, rule.NonResourceURLs, mode, nonResourceWildcardMatch)
-	if len(urlMatches) == 0 {
-		return nil, false
-	}
-	if len(selector.NonResourceURLs) == 0 {
-		urlMatches = append([]string(nil), rule.NonResourceURLs...)
+	isExact := in.WildcardMode == api.WildcardModeExact
+
+	var urlFn, verbFn func(string, string) bool
+	if isExact {
+		urlFn = nonResourceExactMatch
+		verbFn = exactMatchCI
+	} else {
+		urlFn = nonResourceWildcardMatch
+		verbFn = exactOrWildcard
 	}
 
-	verbsRequested := ensureWildcard(selector.Verbs)
-	verbMatches := matchRequested(verbsRequested, rule.Verbs, mode, exactOrWildcard)
-	if len(verbMatches) == 0 {
+	requestedURLs := ensureWildcardForMode(in.Selector.NonResourceURLs, isExact)
+	var ok bool
+	if requestedURLs, ok = resolveField(requestedURLs, in.Rule.NonResourceURLs, in.Selector.NonResourceURLs, in.Mode, urlFn); !ok {
 		return nil, false
 	}
-	if len(selector.Verbs) == 0 {
-		verbMatches = append([]string(nil), rule.Verbs...)
+
+	verbsRequested := ensureWildcardForMode(in.Selector.Verbs, isExact)
+	if verbsRequested, ok = resolveField(verbsRequested, in.Rule.Verbs, in.Selector.Verbs, in.Mode, verbFn); !ok {
+		return nil, false
 	}
 
-	refs := make([]api.RuleRef, 0, len(urlMatches)*len(verbMatches))
-	for _, url := range urlMatches {
-		for _, v := range verbMatches {
+	refs := make([]api.RuleRef, 0, len(requestedURLs)*len(verbsRequested))
+	for _, url := range requestedURLs {
+		for _, v := range verbsRequested {
 			refs = append(refs, api.RuleRef{
 				NonResourceURLs: []string{url},
 				Verb:            v,
-				SourceObjectUID: sourceUID,
-				SourceRuleIndex: ruleIndex,
+				SourceObjectUID: in.SourceUID,
+				SourceRuleIndex: in.RuleIndex,
 			})
 		}
 	}
@@ -154,18 +183,17 @@ func matchRequested(requested, allowed []string, mode api.MatchMode, fn func(str
 
 	matches := make([]string, 0, len(requested))
 	for _, req := range requested {
-		if req == "" {
-			req = ""
-		}
 		ok := false
 		for _, allow := range allowed {
 			if fn(req, allow) {
 				ok = true
+
 				break
 			}
 		}
 		if ok {
 			matches = append(matches, req)
+
 			continue
 		}
 		if mode == api.MatchModeAll {
@@ -176,12 +204,22 @@ func matchRequested(requested, allowed []string, mode api.MatchMode, fn func(str
 	if mode == api.MatchModeAny && len(matches) == 0 {
 		return nil
 	}
+
 	return matches
+}
+
+func exactMatchCI(requested, allowed string) bool {
+	return strings.TrimSpace(strings.ToLower(requested)) == strings.TrimSpace(strings.ToLower(allowed))
+}
+
+func nonResourceExactMatch(requested, allowed string) bool {
+	return strings.TrimSpace(requested) == strings.TrimSpace(allowed)
 }
 
 func exactOrWildcard(requested, allowed string) bool {
 	r := strings.TrimSpace(strings.ToLower(requested))
 	a := strings.TrimSpace(strings.ToLower(allowed))
+
 	return a == "*" || r == "*" || r == a
 }
 
@@ -194,10 +232,10 @@ func resourceWildcardMatch(requested, allowed string) bool {
 	if r == a {
 		return true
 	}
-	if strings.HasSuffix(a, "/*") {
-		prefix := strings.TrimSuffix(a, "/*")
+	if prefix, ok := strings.CutSuffix(a, "/*"); ok {
 		return strings.HasPrefix(r, prefix+"/")
 	}
+
 	return false
 }
 
@@ -210,10 +248,10 @@ func nonResourceWildcardMatch(requested, allowed string) bool {
 	if r == a {
 		return true
 	}
-	if strings.HasSuffix(a, "*") {
-		prefix := strings.TrimSuffix(a, "*")
+	if prefix, ok := strings.CutSuffix(a, "*"); ok {
 		return strings.HasPrefix(r, prefix)
 	}
+
 	return false
 }
 
@@ -234,6 +272,7 @@ func matchResourceNames(requested, allowed []string, mode api.MatchMode) bool {
 				return false
 			}
 		}
+
 		return true
 	}
 	for _, name := range requested {
@@ -241,27 +280,68 @@ func matchResourceNames(requested, allowed []string, mode api.MatchMode) bool {
 			return true
 		}
 	}
+
 	return false
 }
 
-func splitResource(resource string) (string, string) {
+func splitResource(resource string) (base, subresource string) {
 	parts := strings.SplitN(resource, "/", 2)
 	if len(parts) == 1 {
 		return parts[0], ""
 	}
+
 	return parts[0], parts[1]
 }
 
-func ensureWildcard(values []string) []string {
+// ensureWildcardForMode returns the appropriate default when values is empty.
+// In expand mode: empty → ["*"] (match everything via wildcard expansion).
+// In exact mode: empty → nil (no constraint — skip filtering on this field).
+func ensureWildcardForMode(values []string, exact bool) []string {
 	if len(values) == 0 {
+		if exact {
+			return nil
+		}
+
 		return []string{"*"}
 	}
+
 	return values
+}
+
+func copyStrings(src []string) []string {
+	return append([]string(nil), src...)
+}
+
+func resolveField(requested []string, ruleValues []string, selectorValues []string,
+	mode api.MatchMode, fn func(string, string) bool,
+) ([]string, bool) {
+	if requested != nil {
+		matches := matchRequested(requested, ruleValues, mode, fn)
+		if len(matches) == 0 {
+			return nil, false
+		}
+		if len(selectorValues) == 0 {
+			return copyStrings(ruleValues), true
+		}
+
+		return matches, true
+	}
+
+	return copyStrings(ruleValues), true
 }
 
 func normalizeMode(mode api.MatchMode) api.MatchMode {
 	if mode == api.MatchModeAll {
 		return api.MatchModeAll
 	}
+
 	return api.MatchModeAny
+}
+
+func normalizeWildcardMode(wm api.WildcardMode) api.WildcardMode {
+	if wm == api.WildcardModeExact {
+		return api.WildcardModeExact
+	}
+
+	return api.WildcardModeExpand
 }

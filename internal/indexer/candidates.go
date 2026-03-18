@@ -1,28 +1,30 @@
 package indexer
 
 import (
-	"sort"
+	"slices"
 	"strings"
 
-	api "k8s-role-graph/pkg/apis/rbacgraph/v1alpha1"
+	api "k8s-role-graph/pkg/apis/rbacgraph"
 )
 
-func (s *Snapshot) CandidateRoleIDs(selector api.Selector) []RoleID {
+func (s *Snapshot) CandidateRoleIDs(selector api.Selector, wildcardMode api.WildcardMode) []RoleID {
+	exactMode := wildcardMode == api.WildcardModeExact
 	constraints := make([]map[RoleID]struct{}, 0, 3)
 
 	if len(selector.APIGroups) > 0 {
-		constraints = append(constraints, s.collectMatches(s.RoleIDsByAPIGroup, selector.APIGroups))
+		constraints = append(constraints, s.collectMatches(s.RoleIDsByAPIGroup, selector.APIGroups, exactMode))
 	}
 	if len(selector.Resources) > 0 {
-		constraints = append(constraints, s.collectMatches(s.RoleIDsByResource, selector.Resources))
+		constraints = append(constraints, s.collectMatches(s.RoleIDsByResource, selector.Resources, exactMode))
 	}
 	if len(selector.Verbs) > 0 {
-		constraints = append(constraints, s.collectMatches(s.RoleIDsByVerb, selector.Verbs))
+		constraints = append(constraints, s.collectMatches(s.RoleIDsByVerb, selector.Verbs, exactMode))
 	}
 
 	if len(constraints) == 0 {
 		out := make([]RoleID, len(s.AllRoleIDs))
 		copy(out, s.AllRoleIDs)
+
 		return out
 	}
 
@@ -38,29 +40,32 @@ func (s *Snapshot) CandidateRoleIDs(selector api.Selector) []RoleID {
 	for roleID := range intersected {
 		out = append(out, roleID)
 	}
-	sort.Slice(out, func(i, j int) bool {
-		return out[i] < out[j]
-	})
+	slices.Sort(out)
+
 	return out
 }
 
-func (s *Snapshot) collectMatches(index map[string]map[RoleID]struct{}, requested []string) map[RoleID]struct{} {
+func (s *Snapshot) collectMatches(index map[string]map[RoleID]struct{}, requested []string, exactMode bool) map[RoleID]struct{} {
 	matches := make(map[RoleID]struct{})
 	for _, token := range requested {
 		n := strings.ToLower(strings.TrimSpace(token))
-		if n == "" {
-			n = ""
-		}
-		for _, key := range []string{n, "*"} {
-			bucket, ok := index[key]
-			if !ok {
-				continue
-			}
+		if bucket, ok := index[n]; ok {
 			for roleID := range bucket {
 				matches[roleID] = struct{}{}
 			}
 		}
+		// In expand mode, also include roles from the "*" wildcard bucket
+		// (roles with wildcard rules). In exact mode, skip this unless the
+		// requested token is literally "*".
+		if !exactMode && n != "*" {
+			if bucket, ok := index["*"]; ok {
+				for roleID := range bucket {
+					matches[roleID] = struct{}{}
+				}
+			}
+		}
 	}
+
 	return matches
 }
 
@@ -74,5 +79,6 @@ func intersect(left, right map[RoleID]struct{}) map[RoleID]struct{} {
 			out[roleID] = struct{}{}
 		}
 	}
+
 	return out
 }

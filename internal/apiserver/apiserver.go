@@ -2,15 +2,19 @@ package apiserver
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 
 	"k8s.io/apiserver/pkg/registry/rest"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	"k8s.io/apiserver/pkg/server/healthz"
+	"k8s.io/klog/v2"
 
+	"k8s-role-graph/internal/authz"
 	"k8s-role-graph/internal/engine"
 	"k8s-role-graph/internal/indexer"
+	nonresourceurlstorage "k8s-role-graph/internal/registry/nonresourceurl"
 	reviewstorage "k8s-role-graph/internal/registry/rolegraphreview"
 	"k8s-role-graph/pkg/apis/rbacgraph"
 	"k8s-role-graph/pkg/apis/rbacgraph/v1alpha1"
@@ -20,12 +24,14 @@ type Config struct {
 	GenericConfig *genericapiserver.RecommendedConfig
 	Indexer       *indexer.Indexer
 	Engine        *engine.Engine
+	AuthzResolver authz.ScopeResolver // nil when --enforce-caller-scope is disabled
 }
 
 type completedConfig struct {
 	GenericConfig genericapiserver.CompletedConfig
 	Indexer       *indexer.Indexer
 	Engine        *engine.Engine
+	AuthzResolver authz.ScopeResolver
 }
 
 type CompletedConfig struct {
@@ -37,7 +43,9 @@ func (cfg *Config) Complete() CompletedConfig {
 		GenericConfig: cfg.GenericConfig.Complete(),
 		Indexer:       cfg.Indexer,
 		Engine:        cfg.Engine,
+		AuthzResolver: cfg.AuthzResolver,
 	}
+
 	return CompletedConfig{&c}
 }
 
@@ -59,7 +67,8 @@ func (c CompletedConfig) New() (*RbacGraphServer, error) {
 
 	apiGroupInfo := genericapiserver.NewDefaultAPIGroupInfo(rbacgraph.GroupName, Scheme, ParameterCodec, Codecs)
 	v1alpha1storage := map[string]rest.Storage{}
-	v1alpha1storage["rolegraphreviews"] = reviewstorage.NewREST(c.Engine, c.Indexer, Scheme)
+	v1alpha1storage["rolegraphreviews"] = reviewstorage.NewREST(c.Engine, c.Indexer, Scheme, c.AuthzResolver)
+	v1alpha1storage["nonresourceurls"] = nonresourceurlstorage.NewREST(c.Indexer)
 	apiGroupInfo.VersionedResourcesStorageMap[v1alpha1.Version] = v1alpha1storage
 
 	if err := s.GenericAPIServer.InstallAPIGroup(&apiGroupInfo); err != nil {
@@ -69,12 +78,16 @@ func (c CompletedConfig) New() (*RbacGraphServer, error) {
 	s.GenericAPIServer.AddPostStartHookOrDie("start-rbacgraph-indexer", func(hookCtx genericapiserver.PostStartHookContext) error {
 		go func() {
 			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
 			go func() {
 				<-hookCtx.Done()
 				cancel()
 			}()
-			_ = c.Indexer.Start(ctx)
+			if err := c.Indexer.Start(ctx); err != nil {
+				klog.Errorf("indexer failed: %v", err)
+			}
 		}()
+
 		return nil
 	})
 
@@ -85,7 +98,6 @@ func (c CompletedConfig) New() (*RbacGraphServer, error) {
 	return s, nil
 }
 
-// indexerHealthChecker implements healthz.HealthChecker.
 type indexerHealthChecker struct {
 	indexer *indexer.Indexer
 }
@@ -96,8 +108,9 @@ func (c indexerHealthChecker) Name() string {
 
 func (c indexerHealthChecker) Check(_ *http.Request) error {
 	if !c.indexer.IsReady() {
-		return fmt.Errorf("indexer not ready")
+		return errors.New("indexer not ready")
 	}
+
 	return nil
 }
 

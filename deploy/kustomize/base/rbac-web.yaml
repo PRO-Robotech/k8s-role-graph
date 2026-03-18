@@ -6,6 +6,9 @@ rules:
   - apiGroups: ["rbacgraph.incloud.io"]
     resources: ["rolegraphreviews"]
     verbs: ["create"]
+  - apiGroups: [""]
+    resources: ["users", "groups"]
+    verbs: ["impersonate"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -19,3 +22,28 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
   name: rbacgraph-web-query
+---
+# Allow any authenticated user to create RoleGraphReviews.
+# The API server's --enforce-caller-scope flag filters results
+# based on the caller's actual RBAC permissions.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: rbacgraph-query
+rules:
+  - apiGroups: ["rbacgraph.incloud.io"]
+    resources: ["rolegraphreviews"]
+    verbs: ["create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: rbacgraph-query
+subjects:
+  - kind: Group
+    name: system:authenticated
+    apiGroup: rbac.authorization.k8s.io
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: rbacgraph-query

@@ -8,7 +8,8 @@ import (
 // GetEnumOpenAPIDefinitions returns OpenAPI definitions with enum constraints
 // for custom string types that openapi-gen does not handle automatically.
 func GetEnumOpenAPIDefinitions(_ common.ReferenceCallback) map[string]common.OpenAPIDefinition {
-	prefix := "k8s-role-graph/pkg/apis/rbacgraph/v1alpha1."
+	prefix := openAPIPrefix
+
 	return map[string]common.OpenAPIDefinition{
 		prefix + "MatchMode": {
 			Schema: spec.Schema{
@@ -55,6 +56,15 @@ func GetEnumOpenAPIDefinitions(_ common.ReferenceCallback) map[string]common.Ope
 				},
 			},
 		},
+		prefix + "WildcardMode": {
+			Schema: spec.Schema{
+				SchemaProps: spec.SchemaProps{
+					Description: "Wildcard handling mode: 'expand' (resolve wildcards, default) or 'exact' (match literally).",
+					Type:        []string{"string"},
+					Enum:        []any{string(WildcardModeExpand), string(WildcardModeExact)},
+				},
+			},
+		},
 	}
 }
 
@@ -62,10 +72,12 @@ func GetEnumOpenAPIDefinitions(_ common.ReferenceCallback) map[string]common.Ope
 // merged with enum constraints for custom string types.
 func GetOpenAPIDefinitionsWithEnums(ref common.ReferenceCallback) map[string]common.OpenAPIDefinition {
 	defs := GetOpenAPIDefinitions(ref)
-	for key, value := range GetEnumOpenAPIDefinitions(ref) {
-		defs[key] = value
+	enumDefs := GetEnumOpenAPIDefinitions(ref)
+	for key := range enumDefs {
+		defs[key] = enumDefs[key]
 	}
 	injectEnumsIntoStructFields(defs)
+
 	return defs
 }
 
@@ -73,7 +85,7 @@ func GetOpenAPIDefinitionsWithEnums(ref common.ReferenceCallback) map[string]com
 // fields typed as MatchMode, PodPhaseMode, GraphNodeType, or GraphEdgeType
 // carry enum constraints in the parent struct schema.
 func injectEnumsIntoStructFields(defs map[string]common.OpenAPIDefinition) {
-	prefix := "k8s-role-graph/pkg/apis/rbacgraph/v1alpha1."
+	prefix := openAPIPrefix
 
 	patchField := func(typeName, fieldName string, enum []any) {
 		def, ok := defs[prefix+typeName]
@@ -84,13 +96,14 @@ func injectEnumsIntoStructFields(defs map[string]common.OpenAPIDefinition) {
 		if !ok {
 			return
 		}
-		prop.SchemaProps.Enum = enum
+		prop.Enum = enum
 		def.Schema.Properties[fieldName] = prop
 		defs[prefix+typeName] = def
 	}
 
 	patchField("RoleGraphReviewSpec", "matchMode", []any{string(MatchModeAny), string(MatchModeAll)})
 	patchField("RoleGraphReviewSpec", "podPhaseMode", []any{string(PodPhaseModeActive), string(PodPhaseModeRunning), string(PodPhaseModeAll)})
+	patchField("RoleGraphReviewSpec", "wildcardMode", []any{string(WildcardModeExpand), string(WildcardModeExact)})
 	patchField("GraphNode", "type", []any{
 		string(GraphNodeTypeRole), string(GraphNodeTypeClusterRole),
 		string(GraphNodeTypeRoleBinding), string(GraphNodeTypeClusterRoleBinding),
