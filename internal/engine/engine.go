@@ -3,7 +3,7 @@ package engine
 import (
 	"k8s-role-graph/internal/indexer"
 	"k8s-role-graph/internal/matcher"
-	api "k8s-role-graph/pkg/apis/rbacgraph/v1alpha1"
+	api "k8s-role-graph/pkg/apis/rbacgraph"
 )
 
 type Engine struct{}
@@ -15,6 +15,7 @@ func New() *Engine {
 type queryContext struct {
 	snapshot        *indexer.Snapshot
 	spec            api.RoleGraphReviewSpec
+	discovery       *indexer.APIDiscoveryCache
 	status          api.RoleGraphReviewStatus
 	nodeSeen        map[string]struct{}
 	nodeIndex       map[string]int
@@ -96,26 +97,36 @@ func (qc *queryContext) finalize() api.RoleGraphReviewStatus {
 	qc.status.ResourceMap = collapseResourceRows(qc.resourceRows)
 	sortNodes(qc.status.Graph.Nodes)
 	sortEdges(qc.status.Graph.Edges)
+
 	return qc.status
 }
 
-func (e *Engine) Query(snapshot *indexer.Snapshot, spec api.RoleGraphReviewSpec) api.RoleGraphReviewStatus {
+func (e *Engine) Query(snapshot *indexer.Snapshot, spec api.RoleGraphReviewSpec, discovery *indexer.APIDiscoveryCache) api.RoleGraphReviewStatus {
 	qc := newQueryContext(snapshot, spec)
+	qc.discovery = discovery
 
-	roleIDs := snapshot.CandidateRoleIDs(qc.spec.Selector)
+	roleIDs := snapshot.CandidateRoleIDs(qc.spec.Selector, qc.spec.WildcardMode)
 	if len(roleIDs) == 0 {
 		return qc.status
 	}
 
 	qc.buildRBACGraph(roleIDs)
 	qc.expandRuntimeChain()
+
 	return qc.finalize()
 }
 
-func (e *Engine) matchRole(role *indexer.RoleRecord, spec api.RoleGraphReviewSpec) []api.RuleRef {
+func matchRole(role *indexer.RoleRecord, spec api.RoleGraphReviewSpec) []api.RuleRef {
 	refs := make([]api.RuleRef, 0)
 	for idx, rule := range role.Rules {
-		result := matcher.MatchRule(rule, spec.Selector, spec.MatchMode, string(role.UID), idx)
+		result := matcher.MatchRule(matcher.MatchInput{
+			Rule:         rule,
+			Selector:     spec.Selector,
+			Mode:         spec.MatchMode,
+			WildcardMode: spec.WildcardMode,
+			SourceUID:    string(role.UID),
+			RuleIndex:    idx,
+		})
 		if !result.Matched {
 			continue
 		}
@@ -127,5 +138,6 @@ func (e *Engine) matchRole(role *indexer.RoleRecord, spec api.RoleGraphReviewSpe
 			refs[i].SourceRuleIndex = 0
 		}
 	}
+
 	return refs
 }

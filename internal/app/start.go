@@ -15,22 +15,22 @@ import (
 	"k8s.io/client-go/kubernetes"
 
 	internalserver "k8s-role-graph/internal/apiserver"
+	"k8s-role-graph/internal/authz"
 	"k8s-role-graph/internal/engine"
 	"k8s-role-graph/internal/indexer"
 	"k8s-role-graph/pkg/apis/rbacgraph/v1alpha1"
 	"k8s-role-graph/pkg/kube"
 )
 
-// ServerOptions contains the state for the apiserver command.
 type ServerOptions struct {
 	RecommendedOptions *serveroptions.RecommendedOptions
 	ResyncPeriod       time.Duration
+	EnforceCallerScope bool
 
 	StdOut io.Writer
 	StdErr io.Writer
 }
 
-// NewServerOptions returns default ServerOptions.
 func NewServerOptions(out, errOut io.Writer) *ServerOptions {
 	o := &ServerOptions{
 		RecommendedOptions: serveroptions.NewRecommendedOptions(
@@ -46,10 +46,10 @@ func NewServerOptions(out, errOut io.Writer) *ServerOptions {
 	o.RecommendedOptions.Etcd = nil
 	o.RecommendedOptions.Admission = nil
 	o.RecommendedOptions.Features.EnablePriorityAndFairness = false
+
 	return o
 }
 
-// NewCommandStartServer creates the cobra command for the apiserver.
 func NewCommandStartServer(ctx context.Context, defaults *ServerOptions) *cobra.Command {
 	o := defaults
 	cmd := &cobra.Command{
@@ -62,6 +62,7 @@ func NewCommandStartServer(ctx context.Context, defaults *ServerOptions) *cobra.
 			if err := o.Validate(); err != nil {
 				return err
 			}
+
 			return o.Run(ctx)
 		},
 	}
@@ -69,21 +70,24 @@ func NewCommandStartServer(ctx context.Context, defaults *ServerOptions) *cobra.
 	flags := cmd.Flags()
 	o.RecommendedOptions.AddFlags(flags)
 	flags.DurationVar(&o.ResyncPeriod, "resync-period", 0, "Informer resync period (0 = no periodic resync)")
+	flags.BoolVar(&o.EnforceCallerScope, "enforce-caller-scope", false,
+		"Restrict query results to RBAC objects the caller has permission to list")
 
 	return cmd
 }
 
-// Complete fills in remaining defaults.
+// Complete fills in fields derived from other options. Currently a no-op because
+// all configuration is self-contained; kept for cobra RunE convention.
 func (o *ServerOptions) Complete() error {
 	return nil
 }
 
-// Validate checks option values.
+// Validate checks ServerOptions for consistency. Currently a no-op because
+// ResyncPeriod=0 is valid (disables resync) and EnforceCallerScope is a boolean.
 func (o *ServerOptions) Validate() error {
 	return nil
 }
 
-// Run starts the API server.
 func (o *ServerOptions) Run(ctx context.Context) error {
 	serverConfig := server.NewRecommendedConfig(internalserver.Codecs)
 	serverConfig.EffectiveVersion = compatibility.DefaultBuildEffectiveVersion()
@@ -100,8 +104,6 @@ func (o *ServerOptions) Run(ctx context.Context) error {
 	serverConfig.OpenAPIV3Config.Info.Title = "RbacGraph"
 	serverConfig.OpenAPIV3Config.Info.Version = v1alpha1.Version
 
-	// Build the kubernetes clientset for the indexer, using the same
-	// --kubeconfig flag registered by RecommendedOptions.CoreAPI.
 	clientset, err := buildClientset(o.RecommendedOptions.CoreAPI.CoreAPIKubeconfigPath)
 	if err != nil {
 		return fmt.Errorf("build kubernetes clientset: %w", err)
@@ -110,10 +112,16 @@ func (o *ServerOptions) Run(ctx context.Context) error {
 	eng := engine.New()
 	idx := indexer.New(clientset, o.ResyncPeriod)
 
+	var resolver authz.ScopeResolver
+	if o.EnforceCallerScope {
+		resolver = authz.NewLocalResolver(idx.Snapshot)
+	}
+
 	config := &internalserver.Config{
 		GenericConfig: serverConfig,
 		Indexer:       idx,
 		Engine:        eng,
+		AuthzResolver: resolver,
 	}
 
 	completedConfig := config.Complete()
@@ -128,7 +136,8 @@ func (o *ServerOptions) Run(ctx context.Context) error {
 func buildClientset(kubeconfig string) (kubernetes.Interface, error) {
 	cfg, err := kube.ClientConfig(kubeconfig)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("build client config: %w", err)
 	}
+
 	return kubernetes.NewForConfig(cfg)
 }

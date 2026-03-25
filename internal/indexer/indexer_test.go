@@ -69,17 +69,19 @@ func TestIndexWorkloadStoresRecord(t *testing.T) {
 	snapshot := newEmptySnapshot()
 	indexWorkload(
 		snapshot,
-		types.UID("uid-1"),
 		"apps/v1",
 		"Deployment",
-		"team-a",
-		"demo",
-		[]metav1.OwnerReference{{
-			APIVersion: "apps/v1",
-			Kind:       "ReplicaSet",
-			Name:       "demo-rs",
-			UID:        types.UID("uid-rs"),
-		}},
+		metav1.ObjectMeta{
+			UID:       types.UID("uid-1"),
+			Namespace: "team-a",
+			Name:      "demo",
+			OwnerReferences: []metav1.OwnerReference{{
+				APIVersion: "apps/v1",
+				Kind:       "ReplicaSet",
+				Name:       "demo-rs",
+				UID:        types.UID("uid-rs"),
+			}},
+		},
 	)
 
 	got, ok := snapshot.WorkloadsByUID[types.UID("uid-1")]

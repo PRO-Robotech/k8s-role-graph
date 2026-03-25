@@ -32,70 +32,72 @@ import (
 
 func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenAPIDefinition {
 	return map[string]common.OpenAPIDefinition{
-		"k8s-role-graph/pkg/apis/rbacgraph/v1alpha1.Graph":                 schema_pkg_apis_rbacgraph_v1alpha1_Graph(ref),
-		"k8s-role-graph/pkg/apis/rbacgraph/v1alpha1.GraphEdge":             schema_pkg_apis_rbacgraph_v1alpha1_GraphEdge(ref),
-		"k8s-role-graph/pkg/apis/rbacgraph/v1alpha1.GraphNode":             schema_pkg_apis_rbacgraph_v1alpha1_GraphNode(ref),
-		"k8s-role-graph/pkg/apis/rbacgraph/v1alpha1.NamespaceScope":        schema_pkg_apis_rbacgraph_v1alpha1_NamespaceScope(ref),
-		"k8s-role-graph/pkg/apis/rbacgraph/v1alpha1.ResourceMapRow":        schema_pkg_apis_rbacgraph_v1alpha1_ResourceMapRow(ref),
-		"k8s-role-graph/pkg/apis/rbacgraph/v1alpha1.RoleGraphReview":       schema_pkg_apis_rbacgraph_v1alpha1_RoleGraphReview(ref),
-		"k8s-role-graph/pkg/apis/rbacgraph/v1alpha1.RoleGraphReviewSpec":   schema_pkg_apis_rbacgraph_v1alpha1_RoleGraphReviewSpec(ref),
-		"k8s-role-graph/pkg/apis/rbacgraph/v1alpha1.RoleGraphReviewStatus": schema_pkg_apis_rbacgraph_v1alpha1_RoleGraphReviewStatus(ref),
-		"k8s-role-graph/pkg/apis/rbacgraph/v1alpha1.RuleRef":               schema_pkg_apis_rbacgraph_v1alpha1_RuleRef(ref),
-		"k8s-role-graph/pkg/apis/rbacgraph/v1alpha1.Selector":              schema_pkg_apis_rbacgraph_v1alpha1_Selector(ref),
-		resource.Quantity{}.OpenAPIModelName():                             schema_apimachinery_pkg_api_resource_Quantity(ref),
-		v1.APIGroup{}.OpenAPIModelName():                                   schema_pkg_apis_meta_v1_APIGroup(ref),
-		v1.APIGroupList{}.OpenAPIModelName():                               schema_pkg_apis_meta_v1_APIGroupList(ref),
-		v1.APIResource{}.OpenAPIModelName():                                schema_pkg_apis_meta_v1_APIResource(ref),
-		v1.APIResourceList{}.OpenAPIModelName():                            schema_pkg_apis_meta_v1_APIResourceList(ref),
-		v1.APIVersions{}.OpenAPIModelName():                                schema_pkg_apis_meta_v1_APIVersions(ref),
-		v1.ApplyOptions{}.OpenAPIModelName():                               schema_pkg_apis_meta_v1_ApplyOptions(ref),
-		v1.Condition{}.OpenAPIModelName():                                  schema_pkg_apis_meta_v1_Condition(ref),
-		v1.CreateOptions{}.OpenAPIModelName():                              schema_pkg_apis_meta_v1_CreateOptions(ref),
-		v1.DeleteOptions{}.OpenAPIModelName():                              schema_pkg_apis_meta_v1_DeleteOptions(ref),
-		v1.Duration{}.OpenAPIModelName():                                   schema_pkg_apis_meta_v1_Duration(ref),
-		v1.FieldSelectorRequirement{}.OpenAPIModelName():                   schema_pkg_apis_meta_v1_FieldSelectorRequirement(ref),
-		v1.FieldsV1{}.OpenAPIModelName():                                   schema_pkg_apis_meta_v1_FieldsV1(ref),
-		v1.GetOptions{}.OpenAPIModelName():                                 schema_pkg_apis_meta_v1_GetOptions(ref),
-		v1.GroupKind{}.OpenAPIModelName():                                  schema_pkg_apis_meta_v1_GroupKind(ref),
-		v1.GroupResource{}.OpenAPIModelName():                              schema_pkg_apis_meta_v1_GroupResource(ref),
-		v1.GroupVersion{}.OpenAPIModelName():                               schema_pkg_apis_meta_v1_GroupVersion(ref),
-		v1.GroupVersionForDiscovery{}.OpenAPIModelName():                   schema_pkg_apis_meta_v1_GroupVersionForDiscovery(ref),
-		v1.GroupVersionKind{}.OpenAPIModelName():                           schema_pkg_apis_meta_v1_GroupVersionKind(ref),
-		v1.GroupVersionResource{}.OpenAPIModelName():                       schema_pkg_apis_meta_v1_GroupVersionResource(ref),
-		v1.InternalEvent{}.OpenAPIModelName():                              schema_pkg_apis_meta_v1_InternalEvent(ref),
-		v1.LabelSelector{}.OpenAPIModelName():                              schema_pkg_apis_meta_v1_LabelSelector(ref),
-		v1.LabelSelectorRequirement{}.OpenAPIModelName():                   schema_pkg_apis_meta_v1_LabelSelectorRequirement(ref),
-		v1.List{}.OpenAPIModelName():                                       schema_pkg_apis_meta_v1_List(ref),
-		v1.ListMeta{}.OpenAPIModelName():                                   schema_pkg_apis_meta_v1_ListMeta(ref),
-		v1.ListOptions{}.OpenAPIModelName():                                schema_pkg_apis_meta_v1_ListOptions(ref),
-		v1.ManagedFieldsEntry{}.OpenAPIModelName():                         schema_pkg_apis_meta_v1_ManagedFieldsEntry(ref),
-		v1.MicroTime{}.OpenAPIModelName():                                  schema_pkg_apis_meta_v1_MicroTime(ref),
-		v1.ObjectMeta{}.OpenAPIModelName():                                 schema_pkg_apis_meta_v1_ObjectMeta(ref),
-		v1.OwnerReference{}.OpenAPIModelName():                             schema_pkg_apis_meta_v1_OwnerReference(ref),
-		v1.PartialObjectMetadata{}.OpenAPIModelName():                      schema_pkg_apis_meta_v1_PartialObjectMetadata(ref),
-		v1.PartialObjectMetadataList{}.OpenAPIModelName():                  schema_pkg_apis_meta_v1_PartialObjectMetadataList(ref),
-		v1.Patch{}.OpenAPIModelName():                                      schema_pkg_apis_meta_v1_Patch(ref),
-		v1.PatchOptions{}.OpenAPIModelName():                               schema_pkg_apis_meta_v1_PatchOptions(ref),
-		v1.Preconditions{}.OpenAPIModelName():                              schema_pkg_apis_meta_v1_Preconditions(ref),
-		v1.RootPaths{}.OpenAPIModelName():                                  schema_pkg_apis_meta_v1_RootPaths(ref),
-		v1.ServerAddressByClientCIDR{}.OpenAPIModelName():                  schema_pkg_apis_meta_v1_ServerAddressByClientCIDR(ref),
-		v1.Status{}.OpenAPIModelName():                                     schema_pkg_apis_meta_v1_Status(ref),
-		v1.StatusCause{}.OpenAPIModelName():                                schema_pkg_apis_meta_v1_StatusCause(ref),
-		v1.StatusDetails{}.OpenAPIModelName():                              schema_pkg_apis_meta_v1_StatusDetails(ref),
-		v1.Table{}.OpenAPIModelName():                                      schema_pkg_apis_meta_v1_Table(ref),
-		v1.TableColumnDefinition{}.OpenAPIModelName():                      schema_pkg_apis_meta_v1_TableColumnDefinition(ref),
-		v1.TableOptions{}.OpenAPIModelName():                               schema_pkg_apis_meta_v1_TableOptions(ref),
-		v1.TableRow{}.OpenAPIModelName():                                   schema_pkg_apis_meta_v1_TableRow(ref),
-		v1.TableRowCondition{}.OpenAPIModelName():                          schema_pkg_apis_meta_v1_TableRowCondition(ref),
-		v1.Time{}.OpenAPIModelName():                                       schema_pkg_apis_meta_v1_Time(ref),
-		v1.Timestamp{}.OpenAPIModelName():                                  schema_pkg_apis_meta_v1_Timestamp(ref),
-		v1.TypeMeta{}.OpenAPIModelName():                                   schema_pkg_apis_meta_v1_TypeMeta(ref),
-		v1.UpdateOptions{}.OpenAPIModelName():                              schema_pkg_apis_meta_v1_UpdateOptions(ref),
-		v1.WatchEvent{}.OpenAPIModelName():                                 schema_pkg_apis_meta_v1_WatchEvent(ref),
-		runtime.RawExtension{}.OpenAPIModelName():                          schema_k8sio_apimachinery_pkg_runtime_RawExtension(ref),
-		runtime.TypeMeta{}.OpenAPIModelName():                              schema_k8sio_apimachinery_pkg_runtime_TypeMeta(ref),
-		runtime.Unknown{}.OpenAPIModelName():                               schema_k8sio_apimachinery_pkg_runtime_Unknown(ref),
-		version.Info{}.OpenAPIModelName():                                  schema_k8sio_apimachinery_pkg_version_Info(ref),
+		Graph{}.OpenAPIModelName():                        schema_pkg_apis_rbacgraph_v1alpha1_Graph(ref),
+		GraphEdge{}.OpenAPIModelName():                    schema_pkg_apis_rbacgraph_v1alpha1_GraphEdge(ref),
+		GraphNode{}.OpenAPIModelName():                    schema_pkg_apis_rbacgraph_v1alpha1_GraphNode(ref),
+		NamespaceScope{}.OpenAPIModelName():               schema_pkg_apis_rbacgraph_v1alpha1_NamespaceScope(ref),
+		NonResourceURLEntry{}.OpenAPIModelName():          schema_pkg_apis_rbacgraph_v1alpha1_NonResourceURLEntry(ref),
+		NonResourceURLList{}.OpenAPIModelName():           schema_pkg_apis_rbacgraph_v1alpha1_NonResourceURLList(ref),
+		ResourceMapRow{}.OpenAPIModelName():               schema_pkg_apis_rbacgraph_v1alpha1_ResourceMapRow(ref),
+		RoleGraphReview{}.OpenAPIModelName():              schema_pkg_apis_rbacgraph_v1alpha1_RoleGraphReview(ref),
+		RoleGraphReviewSpec{}.OpenAPIModelName():          schema_pkg_apis_rbacgraph_v1alpha1_RoleGraphReviewSpec(ref),
+		RoleGraphReviewStatus{}.OpenAPIModelName():        schema_pkg_apis_rbacgraph_v1alpha1_RoleGraphReviewStatus(ref),
+		RuleRef{}.OpenAPIModelName():                      schema_pkg_apis_rbacgraph_v1alpha1_RuleRef(ref),
+		Selector{}.OpenAPIModelName():                     schema_pkg_apis_rbacgraph_v1alpha1_Selector(ref),
+		resource.Quantity{}.OpenAPIModelName():            schema_apimachinery_pkg_api_resource_Quantity(ref),
+		v1.APIGroup{}.OpenAPIModelName():                  schema_pkg_apis_meta_v1_APIGroup(ref),
+		v1.APIGroupList{}.OpenAPIModelName():              schema_pkg_apis_meta_v1_APIGroupList(ref),
+		v1.APIResource{}.OpenAPIModelName():               schema_pkg_apis_meta_v1_APIResource(ref),
+		v1.APIResourceList{}.OpenAPIModelName():           schema_pkg_apis_meta_v1_APIResourceList(ref),
+		v1.APIVersions{}.OpenAPIModelName():               schema_pkg_apis_meta_v1_APIVersions(ref),
+		v1.ApplyOptions{}.OpenAPIModelName():              schema_pkg_apis_meta_v1_ApplyOptions(ref),
+		v1.Condition{}.OpenAPIModelName():                 schema_pkg_apis_meta_v1_Condition(ref),
+		v1.CreateOptions{}.OpenAPIModelName():             schema_pkg_apis_meta_v1_CreateOptions(ref),
+		v1.DeleteOptions{}.OpenAPIModelName():             schema_pkg_apis_meta_v1_DeleteOptions(ref),
+		v1.Duration{}.OpenAPIModelName():                  schema_pkg_apis_meta_v1_Duration(ref),
+		v1.FieldSelectorRequirement{}.OpenAPIModelName():  schema_pkg_apis_meta_v1_FieldSelectorRequirement(ref),
+		v1.FieldsV1{}.OpenAPIModelName():                  schema_pkg_apis_meta_v1_FieldsV1(ref),
+		v1.GetOptions{}.OpenAPIModelName():                schema_pkg_apis_meta_v1_GetOptions(ref),
+		v1.GroupKind{}.OpenAPIModelName():                 schema_pkg_apis_meta_v1_GroupKind(ref),
+		v1.GroupResource{}.OpenAPIModelName():             schema_pkg_apis_meta_v1_GroupResource(ref),
+		v1.GroupVersion{}.OpenAPIModelName():              schema_pkg_apis_meta_v1_GroupVersion(ref),
+		v1.GroupVersionForDiscovery{}.OpenAPIModelName():  schema_pkg_apis_meta_v1_GroupVersionForDiscovery(ref),
+		v1.GroupVersionKind{}.OpenAPIModelName():          schema_pkg_apis_meta_v1_GroupVersionKind(ref),
+		v1.GroupVersionResource{}.OpenAPIModelName():      schema_pkg_apis_meta_v1_GroupVersionResource(ref),
+		v1.InternalEvent{}.OpenAPIModelName():             schema_pkg_apis_meta_v1_InternalEvent(ref),
+		v1.LabelSelector{}.OpenAPIModelName():             schema_pkg_apis_meta_v1_LabelSelector(ref),
+		v1.LabelSelectorRequirement{}.OpenAPIModelName():  schema_pkg_apis_meta_v1_LabelSelectorRequirement(ref),
+		v1.List{}.OpenAPIModelName():                      schema_pkg_apis_meta_v1_List(ref),
+		v1.ListMeta{}.OpenAPIModelName():                  schema_pkg_apis_meta_v1_ListMeta(ref),
+		v1.ListOptions{}.OpenAPIModelName():               schema_pkg_apis_meta_v1_ListOptions(ref),
+		v1.ManagedFieldsEntry{}.OpenAPIModelName():        schema_pkg_apis_meta_v1_ManagedFieldsEntry(ref),
+		v1.MicroTime{}.OpenAPIModelName():                 schema_pkg_apis_meta_v1_MicroTime(ref),
+		v1.ObjectMeta{}.OpenAPIModelName():                schema_pkg_apis_meta_v1_ObjectMeta(ref),
+		v1.OwnerReference{}.OpenAPIModelName():            schema_pkg_apis_meta_v1_OwnerReference(ref),
+		v1.PartialObjectMetadata{}.OpenAPIModelName():     schema_pkg_apis_meta_v1_PartialObjectMetadata(ref),
+		v1.PartialObjectMetadataList{}.OpenAPIModelName(): schema_pkg_apis_meta_v1_PartialObjectMetadataList(ref),
+		v1.Patch{}.OpenAPIModelName():                     schema_pkg_apis_meta_v1_Patch(ref),
+		v1.PatchOptions{}.OpenAPIModelName():              schema_pkg_apis_meta_v1_PatchOptions(ref),
+		v1.Preconditions{}.OpenAPIModelName():             schema_pkg_apis_meta_v1_Preconditions(ref),
+		v1.RootPaths{}.OpenAPIModelName():                 schema_pkg_apis_meta_v1_RootPaths(ref),
+		v1.ServerAddressByClientCIDR{}.OpenAPIModelName(): schema_pkg_apis_meta_v1_ServerAddressByClientCIDR(ref),
+		v1.Status{}.OpenAPIModelName():                    schema_pkg_apis_meta_v1_Status(ref),
+		v1.StatusCause{}.OpenAPIModelName():               schema_pkg_apis_meta_v1_StatusCause(ref),
+		v1.StatusDetails{}.OpenAPIModelName():             schema_pkg_apis_meta_v1_StatusDetails(ref),
+		v1.Table{}.OpenAPIModelName():                     schema_pkg_apis_meta_v1_Table(ref),
+		v1.TableColumnDefinition{}.OpenAPIModelName():     schema_pkg_apis_meta_v1_TableColumnDefinition(ref),
+		v1.TableOptions{}.OpenAPIModelName():              schema_pkg_apis_meta_v1_TableOptions(ref),
+		v1.TableRow{}.OpenAPIModelName():                  schema_pkg_apis_meta_v1_TableRow(ref),
+		v1.TableRowCondition{}.OpenAPIModelName():         schema_pkg_apis_meta_v1_TableRowCondition(ref),
+		v1.Time{}.OpenAPIModelName():                      schema_pkg_apis_meta_v1_Time(ref),
+		v1.Timestamp{}.OpenAPIModelName():                 schema_pkg_apis_meta_v1_Timestamp(ref),
+		v1.TypeMeta{}.OpenAPIModelName():                  schema_pkg_apis_meta_v1_TypeMeta(ref),
+		v1.UpdateOptions{}.OpenAPIModelName():             schema_pkg_apis_meta_v1_UpdateOptions(ref),
+		v1.WatchEvent{}.OpenAPIModelName():                schema_pkg_apis_meta_v1_WatchEvent(ref),
+		runtime.RawExtension{}.OpenAPIModelName():         schema_k8sio_apimachinery_pkg_runtime_RawExtension(ref),
+		runtime.TypeMeta{}.OpenAPIModelName():             schema_k8sio_apimachinery_pkg_runtime_TypeMeta(ref),
+		runtime.Unknown{}.OpenAPIModelName():              schema_k8sio_apimachinery_pkg_runtime_Unknown(ref),
+		version.Info{}.OpenAPIModelName():                 schema_k8sio_apimachinery_pkg_version_Info(ref),
 	}
 }
 
@@ -112,7 +114,7 @@ func schema_pkg_apis_rbacgraph_v1alpha1_Graph(ref common.ReferenceCallback) comm
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s-role-graph/pkg/apis/rbacgraph/v1alpha1.GraphNode"),
+										Ref:     ref(GraphNode{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -125,7 +127,7 @@ func schema_pkg_apis_rbacgraph_v1alpha1_Graph(ref common.ReferenceCallback) comm
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s-role-graph/pkg/apis/rbacgraph/v1alpha1.GraphEdge"),
+										Ref:     ref(GraphEdge{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -136,7 +138,7 @@ func schema_pkg_apis_rbacgraph_v1alpha1_Graph(ref common.ReferenceCallback) comm
 			},
 		},
 		Dependencies: []string{
-			"k8s-role-graph/pkg/apis/rbacgraph/v1alpha1.GraphEdge", "k8s-role-graph/pkg/apis/rbacgraph/v1alpha1.GraphNode"},
+			GraphEdge{}.OpenAPIModelName(), GraphNode{}.OpenAPIModelName()},
 	}
 }
 
@@ -183,7 +185,7 @@ func schema_pkg_apis_rbacgraph_v1alpha1_GraphEdge(ref common.ReferenceCallback) 
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s-role-graph/pkg/apis/rbacgraph/v1alpha1.RuleRef"),
+										Ref:     ref(RuleRef{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -200,7 +202,7 @@ func schema_pkg_apis_rbacgraph_v1alpha1_GraphEdge(ref common.ReferenceCallback) 
 			},
 		},
 		Dependencies: []string{
-			"k8s-role-graph/pkg/apis/rbacgraph/v1alpha1.RuleRef"},
+			RuleRef{}.OpenAPIModelName()},
 	}
 }
 
@@ -266,7 +268,7 @@ func schema_pkg_apis_rbacgraph_v1alpha1_GraphNode(ref common.ReferenceCallback) 
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s-role-graph/pkg/apis/rbacgraph/v1alpha1.RuleRef"),
+										Ref:     ref(RuleRef{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -331,7 +333,7 @@ func schema_pkg_apis_rbacgraph_v1alpha1_GraphNode(ref common.ReferenceCallback) 
 			},
 		},
 		Dependencies: []string{
-			"k8s-role-graph/pkg/apis/rbacgraph/v1alpha1.RuleRef"},
+			RuleRef{}.OpenAPIModelName()},
 	}
 }
 
@@ -364,6 +366,104 @@ func schema_pkg_apis_rbacgraph_v1alpha1_NamespaceScope(ref common.ReferenceCallb
 				},
 			},
 		},
+	}
+}
+
+func schema_pkg_apis_rbacgraph_v1alpha1_NonResourceURLEntry(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "NonResourceURLEntry represents a single non-resource URL with its verbs and source roles.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"url": {
+						SchemaProps: spec.SchemaProps{
+							Default: "",
+							Type:    []string{"string"},
+							Format:  "",
+						},
+					},
+					"verbs": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: "",
+										Type:    []string{"string"},
+										Format:  "",
+									},
+								},
+							},
+						},
+					},
+					"roles": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: "",
+										Type:    []string{"string"},
+										Format:  "",
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"url", "verbs", "roles"},
+			},
+		},
+	}
+}
+
+func schema_pkg_apis_rbacgraph_v1alpha1_NonResourceURLList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "NonResourceURLList is a list of non-resource URLs found across ClusterRole rules.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref(v1.ListMeta{}.OpenAPIModelName()),
+						},
+					},
+					"items": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref(NonResourceURLEntry{}.OpenAPIModelName()),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"items"},
+			},
+		},
+		Dependencies: []string{
+			NonResourceURLEntry{}.OpenAPIModelName(), v1.ListMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -449,13 +549,13 @@ func schema_pkg_apis_rbacgraph_v1alpha1_RoleGraphReview(ref common.ReferenceCall
 					"spec": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
-							Ref:     ref("k8s-role-graph/pkg/apis/rbacgraph/v1alpha1.RoleGraphReviewSpec"),
+							Ref:     ref(RoleGraphReviewSpec{}.OpenAPIModelName()),
 						},
 					},
 					"status": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
-							Ref:     ref("k8s-role-graph/pkg/apis/rbacgraph/v1alpha1.RoleGraphReviewStatus"),
+							Ref:     ref(RoleGraphReviewStatus{}.OpenAPIModelName()),
 						},
 					},
 				},
@@ -463,7 +563,7 @@ func schema_pkg_apis_rbacgraph_v1alpha1_RoleGraphReview(ref common.ReferenceCall
 			},
 		},
 		Dependencies: []string{
-			"k8s-role-graph/pkg/apis/rbacgraph/v1alpha1.RoleGraphReviewSpec", "k8s-role-graph/pkg/apis/rbacgraph/v1alpha1.RoleGraphReviewStatus", v1.ObjectMeta{}.OpenAPIModelName()},
+			RoleGraphReviewSpec{}.OpenAPIModelName(), RoleGraphReviewStatus{}.OpenAPIModelName(), v1.ObjectMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -476,7 +576,7 @@ func schema_pkg_apis_rbacgraph_v1alpha1_RoleGraphReviewSpec(ref common.Reference
 					"selector": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
-							Ref:     ref("k8s-role-graph/pkg/apis/rbacgraph/v1alpha1.Selector"),
+							Ref:     ref(Selector{}.OpenAPIModelName()),
 						},
 					},
 					"matchMode": {
@@ -485,6 +585,14 @@ func schema_pkg_apis_rbacgraph_v1alpha1_RoleGraphReviewSpec(ref common.Reference
 							Type:        []string{"string"},
 							Format:      "",
 							Enum:        []interface{}{"all", "any"},
+						},
+					},
+					"wildcardMode": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Possible enum values:\n - `\"exact\"`\n - `\"expand\"`",
+							Type:        []string{"string"},
+							Format:      "",
+							Enum:        []interface{}{"exact", "expand"},
 						},
 					},
 					"includeRuleMetadata": {
@@ -496,7 +604,7 @@ func schema_pkg_apis_rbacgraph_v1alpha1_RoleGraphReviewSpec(ref common.Reference
 					"namespaceScope": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
-							Ref:     ref("k8s-role-graph/pkg/apis/rbacgraph/v1alpha1.NamespaceScope"),
+							Ref:     ref(NamespaceScope{}.OpenAPIModelName()),
 						},
 					},
 					"includePods": {
@@ -531,11 +639,17 @@ func schema_pkg_apis_rbacgraph_v1alpha1_RoleGraphReviewSpec(ref common.Reference
 							Format: "int32",
 						},
 					},
+					"filterPhantomAPIs": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"boolean"},
+							Format: "",
+						},
+					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"k8s-role-graph/pkg/apis/rbacgraph/v1alpha1.NamespaceScope", "k8s-role-graph/pkg/apis/rbacgraph/v1alpha1.Selector"},
+			NamespaceScope{}.OpenAPIModelName(), Selector{}.OpenAPIModelName()},
 	}
 }
 
@@ -609,7 +723,7 @@ func schema_pkg_apis_rbacgraph_v1alpha1_RoleGraphReviewStatus(ref common.Referen
 					"graph": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
-							Ref:     ref("k8s-role-graph/pkg/apis/rbacgraph/v1alpha1.Graph"),
+							Ref:     ref(Graph{}.OpenAPIModelName()),
 						},
 					},
 					"resourceMap": {
@@ -619,7 +733,7 @@ func schema_pkg_apis_rbacgraph_v1alpha1_RoleGraphReviewStatus(ref common.Referen
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s-role-graph/pkg/apis/rbacgraph/v1alpha1.ResourceMapRow"),
+										Ref:     ref(ResourceMapRow{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -630,7 +744,7 @@ func schema_pkg_apis_rbacgraph_v1alpha1_RoleGraphReviewStatus(ref common.Referen
 			},
 		},
 		Dependencies: []string{
-			"k8s-role-graph/pkg/apis/rbacgraph/v1alpha1.Graph", "k8s-role-graph/pkg/apis/rbacgraph/v1alpha1.ResourceMapRow"},
+			Graph{}.OpenAPIModelName(), ResourceMapRow{}.OpenAPIModelName()},
 	}
 }
 
@@ -710,9 +824,36 @@ func schema_pkg_apis_rbacgraph_v1alpha1_RuleRef(ref common.ReferenceCallback) co
 							Format: "int32",
 						},
 					},
+					"phantom": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"boolean"},
+							Format: "",
+						},
+					},
+					"unsupportedVerb": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"boolean"},
+							Format: "",
+						},
+					},
+					"expandedRefs": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref(RuleRef{}.OpenAPIModelName()),
+									},
+								},
+							},
+						},
+					},
 				},
 			},
 		},
+		Dependencies: []string{
+			RuleRef{}.OpenAPIModelName()},
 	}
 }
 

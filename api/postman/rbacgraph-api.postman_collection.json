@@ -1,0 +1,361 @@
+{
+  "info": {
+    "name": "RbacGraph API (v1alpha1)",
+    "description": "Postman collection for testing rbacgraph.incloud.io/v1alpha1 API endpoints.\n\nPrerequisites:\n- kubectl port-forward svc/rbacgraph-web 8081:80 -n rbac-graph-system\n- Or direct access via kubectl proxy / apiserver port-forward",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8081",
+      "description": "Web proxy base URL (port-forward to rbacgraph-web service)"
+    },
+    {
+      "key": "apiPath",
+      "value": "/apis/rbacgraph.incloud.io/v1alpha1",
+      "description": "API group path"
+    }
+  ],
+  "item": [
+    {
+      "name": "Discovery",
+      "description": "API discovery and health endpoints",
+      "item": [
+        {
+          "name": "API Group Discovery",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}{{apiPath}}",
+              "host": ["{{baseUrl}}{{apiPath}}"]
+            },
+            "description": "Discover available resources in the rbacgraph.incloud.io/v1alpha1 API group."
+          }
+        },
+        {
+          "name": "Health Check (Web)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/health",
+              "host": ["{{baseUrl}}/api/health"]
+            },
+            "description": "Health check for the web proxy server."
+          }
+        }
+      ]
+    },
+    {
+      "name": "NonResourceURLs",
+      "description": "List all non-resource URLs found in ClusterRole rules",
+      "item": [
+        {
+          "name": "List All NonResourceURLs",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}{{apiPath}}/nonresourceurls",
+              "host": ["{{baseUrl}}{{apiPath}}/nonresourceurls"]
+            },
+            "description": "Returns all non-resource URLs found across all ClusterRole rules, with associated verbs and source role names."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Response is NonResourceURLList', () => {",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body.kind).to.eql('NonResourceURLList');",
+                  "  pm.expect(body.apiVersion).to.eql('rbacgraph.incloud.io/v1alpha1');",
+                  "  pm.expect(body.items).to.be.an('array');",
+                  "});",
+                  "pm.test('Each item has url, verbs, roles', () => {",
+                  "  const items = pm.response.json().items;",
+                  "  items.forEach(item => {",
+                  "    pm.expect(item).to.have.property('url');",
+                  "    pm.expect(item).to.have.property('verbs').that.is.an('array');",
+                  "    pm.expect(item).to.have.property('roles').that.is.an('array');",
+                  "  });",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List NonResourceURLs (Table format)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}{{apiPath}}/nonresourceurls",
+              "host": ["{{baseUrl}}{{apiPath}}/nonresourceurls"],
+              "query": []
+            },
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json;as=Table;v=v1;g=meta.k8s.io"
+              }
+            ],
+            "description": "Returns non-resource URLs in Kubernetes Table format (same as kubectl output)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Response is Table', () => {",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body.kind).to.eql('Table');",
+                  "  pm.expect(body.columnDefinitions).to.be.an('array');",
+                  "  pm.expect(body.rows).to.be.an('array');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "RoleGraphReview",
+      "description": "RBAC role graph query endpoints",
+      "item": [
+        {
+          "name": "Query: pods/exec access",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}{{apiPath}}/rolegraphreviews",
+              "host": ["{{baseUrl}}{{apiPath}}/rolegraphreviews"]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"apiVersion\": \"rbacgraph.incloud.io/v1alpha1\",\n  \"kind\": \"RoleGraphReview\",\n  \"metadata\": { \"name\": \"pods-exec\" },\n  \"spec\": {\n    \"selector\": {\n      \"apiGroups\": [\"\"],\n      \"resources\": [\"pods/exec\"],\n      \"verbs\": [\"get\", \"create\"]\n    },\n    \"matchMode\": \"any\",\n    \"includeRuleMetadata\": true\n  }\n}"
+            },
+            "description": "Find all roles/subjects with pods/exec access."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200 or 201', () => {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+                  "});",
+                  "pm.test('Response has graph and resourceMap', () => {",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body.status).to.have.property('graph');",
+                  "  pm.expect(body.status).to.have.property('resourceMap');",
+                  "  pm.expect(body.status.graph).to.have.property('nodes');",
+                  "  pm.expect(body.status.graph).to.have.property('edges');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Query: secrets access",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}{{apiPath}}/rolegraphreviews",
+              "host": ["{{baseUrl}}{{apiPath}}/rolegraphreviews"]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"apiVersion\": \"rbacgraph.incloud.io/v1alpha1\",\n  \"kind\": \"RoleGraphReview\",\n  \"metadata\": { \"name\": \"secrets-access\" },\n  \"spec\": {\n    \"selector\": {\n      \"apiGroups\": [\"\"],\n      \"resources\": [\"secrets\"]\n    },\n    \"matchMode\": \"any\",\n    \"includePods\": true\n  }\n}"
+            },
+            "description": "Find all roles/subjects with access to secrets, including pod associations."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200 or 201', () => {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+                  "});",
+                  "pm.test('Has matched roles count', () => {",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body.status.matchedRoles).to.be.a('number');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Query: nonResourceURLs (/metrics)",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}{{apiPath}}/rolegraphreviews",
+              "host": ["{{baseUrl}}{{apiPath}}/rolegraphreviews"]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"apiVersion\": \"rbacgraph.incloud.io/v1alpha1\",\n  \"kind\": \"RoleGraphReview\",\n  \"metadata\": { \"name\": \"metrics-urls\" },\n  \"spec\": {\n    \"selector\": {\n      \"nonResourceURLs\": [\"/metrics\"]\n    },\n    \"matchMode\": \"any\"\n  }\n}"
+            },
+            "description": "Find all roles/subjects with access to /metrics non-resource URL."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200 or 201', () => {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+                  "});",
+                  "pm.test('Has graph', () => {",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body.status.graph.nodes).to.be.an('array');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Query: wildcard (all permissions)",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}{{apiPath}}/rolegraphreviews",
+              "host": ["{{baseUrl}}{{apiPath}}/rolegraphreviews"]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"apiVersion\": \"rbacgraph.incloud.io/v1alpha1\",\n  \"kind\": \"RoleGraphReview\",\n  \"metadata\": { \"name\": \"wildcard\" },\n  \"spec\": {\n    \"selector\": {\n      \"apiGroups\": [\"*\"],\n      \"resources\": [\"*\"],\n      \"verbs\": [\"*\"]\n    },\n    \"wildcardMode\": \"exact\",\n    \"matchMode\": \"all\"\n  }\n}"
+            },
+            "description": "Find roles with wildcard (*) access to all resources in all API groups."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200 or 201', () => {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Query: namespace-scoped",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}{{apiPath}}/rolegraphreviews",
+              "host": ["{{baseUrl}}{{apiPath}}/rolegraphreviews"]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"apiVersion\": \"rbacgraph.incloud.io/v1alpha1\",\n  \"kind\": \"RoleGraphReview\",\n  \"metadata\": { \"name\": \"ns-kube-system\" },\n  \"spec\": {\n    \"selector\": {\n      \"resources\": [\"pods\"]\n    },\n    \"namespaceScope\": {\n      \"namespaces\": [\"kube-system\"],\n      \"strict\": true\n    },\n    \"matchMode\": \"any\"\n  }\n}"
+            },
+            "description": "Find pod access roles strictly in kube-system namespace."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200 or 201', () => {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Web Proxy",
+      "description": "Web proxy API (used by the frontend UI)",
+      "item": [
+        {
+          "name": "Query via Web Proxy",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/api/query",
+              "host": ["{{baseUrl}}/api/query"]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"spec\": {\n    \"selector\": {\n      \"resources\": [\"pods\"],\n      \"verbs\": [\"get\", \"list\"]\n    }\n  }\n}"
+            },
+            "description": "Query via the web proxy /api/query endpoint (simplified JSON body)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200 or 201', () => {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+                  "});",
+                  "pm.test('Response has status with graph', () => {",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body.status || body).to.have.property('graph');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

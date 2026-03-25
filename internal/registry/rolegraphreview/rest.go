@@ -2,156 +2,139 @@ package rolegraphreview
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/apiserver/pkg/registry/rest"
 
+	"k8s-role-graph/internal/authz"
 	"k8s-role-graph/internal/engine"
 	"k8s-role-graph/internal/indexer"
 	"k8s-role-graph/pkg/apis/rbacgraph"
-	"k8s-role-graph/pkg/apis/rbacgraph/v1alpha1"
 )
 
-// REST implements rest.Storage and rest.Creater for RoleGraphReview.
-// It is a create-only resource — no persistence.
 type REST struct {
-	engine  *engine.Engine
-	indexer *indexer.Indexer
-	scheme  *runtime.Scheme
+	engine        *engine.Engine
+	indexer       *indexer.Indexer
+	scheme        *runtime.Scheme
+	authzResolver authz.ScopeResolver // nil when --enforce-caller-scope is disabled
 }
 
 var _ rest.Storage = &REST{}
 var _ rest.Creater = &REST{}
 var _ rest.SingularNameProvider = &REST{}
 
-func NewREST(eng *engine.Engine, idx *indexer.Indexer, scheme *runtime.Scheme) *REST {
+func NewREST(eng *engine.Engine, idx *indexer.Indexer, scheme *runtime.Scheme, resolver authz.ScopeResolver) *REST {
 	return &REST{
-		engine:  eng,
-		indexer: idx,
-		scheme:  scheme,
+		engine:        eng,
+		indexer:       idx,
+		scheme:        scheme,
+		authzResolver: resolver,
 	}
 }
 
-// New returns a new internal RoleGraphReview object.
 func (r *REST) New() runtime.Object {
 	return &rbacgraph.RoleGraphReview{}
 }
 
-// Destroy is a no-op.
 func (r *REST) Destroy() {}
 
-// NamespaceScoped returns false — RoleGraphReview is cluster-scoped.
 func (r *REST) NamespaceScoped() bool {
 	return false
 }
 
-// GetSingularName returns the singular name of the resource.
 func (r *REST) GetSingularName() string {
 	return "rolegraphreview"
 }
 
-// Create handles POST /apis/rbacgraph.incloud.io/v1alpha1/rolegraphreviews.
-// It converts the internal RoleGraphReview spec to v1alpha1, executes the engine query,
-// and populates the status.
 func (r *REST) Create(ctx context.Context, obj runtime.Object, _ rest.ValidateObjectFunc, _ *metav1.CreateOptions) (runtime.Object, error) {
 	review, ok := obj.(*rbacgraph.RoleGraphReview)
 	if !ok {
 		return nil, fmt.Errorf("unexpected object type: %T", obj)
 	}
 
-	// Convert internal spec to v1alpha1 for engine consumption.
-	v1Spec := convertSpecToV1alpha1(review.Spec)
-	v1Spec.EnsureDefaults()
-	if err := v1Spec.Validate(); err != nil {
+	review.Spec.EnsureDefaults()
+	if err := review.Spec.Validate(); err != nil {
 		return nil, err
 	}
 
-	snapshot := r.indexer.Snapshot()
-	v1Status := r.engine.Query(snapshot, v1Spec)
+	if err := r.indexer.ValidateSelector(review.Spec.Selector); err != nil {
+		return nil, apierrors.NewBadRequest(err.Error())
+	}
 
-	// Convert v1alpha1 status back to internal.
-	review.Status = convertStatusToInternal(v1Status)
+	snapshot := r.indexer.Snapshot()
+
+	var scopeWarnings []string
+	if r.authzResolver != nil {
+		userInfo, ok := request.UserFrom(ctx)
+		if !ok {
+			return nil, errors.New("cannot enforce caller scope: no user info in request context")
+		}
+		namespacesToCheck := collectNamespacesFromSnapshot(snapshot, review.Spec.NamespaceScope)
+		scope, err := r.authzResolver.Resolve(ctx, userInfo, namespacesToCheck)
+		if err != nil {
+			return nil, fmt.Errorf("resolve caller access scope: %w", err)
+		}
+		snapshot = indexer.Scoped(snapshot, scope)
+		scopeWarnings = scope.Warnings
+	}
+
+	review.Status = r.engine.Query(snapshot, review.Spec, r.indexer.DiscoveryCache())
+
+	if len(scopeWarnings) > 0 {
+		review.Status.Warnings = append(review.Status.Warnings, scopeWarnings...)
+	}
+
 	review.CreationTimestamp = metav1.Now()
+
 	return review, nil
 }
 
-func convertSpecToV1alpha1(in rbacgraph.RoleGraphReviewSpec) v1alpha1.RoleGraphReviewSpec {
-	return v1alpha1.RoleGraphReviewSpec{
-		Selector: v1alpha1.Selector{
-			APIGroups:       in.Selector.APIGroups,
-			Resources:       in.Selector.Resources,
-			Verbs:           in.Selector.Verbs,
-			ResourceNames:   in.Selector.ResourceNames,
-			NonResourceURLs: in.Selector.NonResourceURLs,
-		},
-		MatchMode:           v1alpha1.MatchMode(in.MatchMode),
-		IncludeRuleMetadata: in.IncludeRuleMetadata,
-		NamespaceScope: v1alpha1.NamespaceScope{
-			Namespaces: in.NamespaceScope.Namespaces,
-			Strict:     in.NamespaceScope.Strict,
-		},
-		IncludePods:        in.IncludePods,
-		IncludeWorkloads:   in.IncludeWorkloads,
-		PodPhaseMode:       v1alpha1.PodPhaseMode(in.PodPhaseMode),
-		MaxPodsPerSubject:  in.MaxPodsPerSubject,
-		MaxWorkloadsPerPod: in.MaxWorkloadsPerPod,
+// collectNamespacesFromSnapshot extracts unique namespaces from the snapshot,
+// optionally filtered by the NamespaceScope from the request spec.
+func collectNamespacesFromSnapshot(s *indexer.Snapshot, nsScope rbacgraph.NamespaceScope) []string {
+	nsSet := make(map[string]struct{})
+	addNS := func(ns string) {
+		if ns != "" {
+			nsSet[ns] = struct{}{}
+		}
 	}
-}
+	for _, rec := range s.RolesByID {
+		addNS(rec.Namespace)
+	}
+	for _, bindings := range s.BindingsByRoleRef {
+		for _, b := range bindings {
+			addNS(b.Namespace)
+		}
+	}
+	for key := range s.PodsByServiceAccount {
+		addNS(key.Namespace)
+	}
+	for _, w := range s.WorkloadsByUID {
+		addNS(w.Namespace)
+	}
 
-func convertStatusToInternal(in v1alpha1.RoleGraphReviewStatus) rbacgraph.RoleGraphReviewStatus {
-	out := rbacgraph.RoleGraphReviewStatus{
-		MatchedRoles:     in.MatchedRoles,
-		MatchedBindings:  in.MatchedBindings,
-		MatchedSubjects:  in.MatchedSubjects,
-		MatchedPods:      in.MatchedPods,
-		MatchedWorkloads: in.MatchedWorkloads,
-		Warnings:         in.Warnings,
-		KnownGaps:        in.KnownGaps,
-	}
-	out.Graph.Nodes = make([]rbacgraph.GraphNode, len(in.Graph.Nodes))
-	for i, n := range in.Graph.Nodes {
-		out.Graph.Nodes[i] = rbacgraph.GraphNode{
-			ID: n.ID, Type: string(n.Type), Name: n.Name, Namespace: n.Namespace,
-			Aggregated: n.Aggregated, AggregationSources: n.AggregationSources,
-			Labels: n.Labels, Annotations: n.Annotations,
-			PodPhase: n.PodPhase, WorkloadKind: n.WorkloadKind,
-			Synthetic: n.Synthetic, HiddenCount: n.HiddenCount,
+	// If the caller specified explicit namespaces, intersect.
+	if len(nsScope.Namespaces) > 0 {
+		allowed := make(map[string]struct{}, len(nsScope.Namespaces))
+		for _, ns := range nsScope.Namespaces {
+			allowed[ns] = struct{}{}
 		}
-		out.Graph.Nodes[i].MatchedRuleRefs = make([]rbacgraph.RuleRef, len(n.MatchedRuleRefs))
-		for j, r := range n.MatchedRuleRefs {
-			out.Graph.Nodes[i].MatchedRuleRefs[j] = rbacgraph.RuleRef{
-				APIVersion: r.APIVersion, APIGroup: r.APIGroup,
-				Resource: r.Resource, Subresource: r.Subresource,
-				Verb: r.Verb, ResourceNames: r.ResourceNames,
-				NonResourceURLs: r.NonResourceURLs,
-				SourceObjectUID: r.SourceObjectUID, SourceRuleIndex: r.SourceRuleIndex,
+		for ns := range nsSet {
+			if _, ok := allowed[ns]; !ok {
+				delete(nsSet, ns)
 			}
 		}
 	}
-	out.Graph.Edges = make([]rbacgraph.GraphEdge, len(in.Graph.Edges))
-	for i, e := range in.Graph.Edges {
-		out.Graph.Edges[i] = rbacgraph.GraphEdge{
-			ID: e.ID, From: e.From, To: e.To, Type: string(e.Type), Explain: e.Explain,
-		}
-		out.Graph.Edges[i].RuleRefs = make([]rbacgraph.RuleRef, len(e.RuleRefs))
-		for j, r := range e.RuleRefs {
-			out.Graph.Edges[i].RuleRefs[j] = rbacgraph.RuleRef{
-				APIVersion: r.APIVersion, APIGroup: r.APIGroup,
-				Resource: r.Resource, Subresource: r.Subresource,
-				Verb: r.Verb, ResourceNames: r.ResourceNames,
-				NonResourceURLs: r.NonResourceURLs,
-				SourceObjectUID: r.SourceObjectUID, SourceRuleIndex: r.SourceRuleIndex,
-			}
-		}
+
+	out := make([]string, 0, len(nsSet))
+	for ns := range nsSet {
+		out = append(out, ns)
 	}
-	out.ResourceMap = make([]rbacgraph.ResourceMapRow, len(in.ResourceMap))
-	for i, r := range in.ResourceMap {
-		out.ResourceMap[i] = rbacgraph.ResourceMapRow{
-			APIGroup: r.APIGroup, Resource: r.Resource, Verb: r.Verb,
-			RoleCount: r.RoleCount, BindingCount: r.BindingCount, SubjectCount: r.SubjectCount,
-		}
-	}
+
 	return out
 }
