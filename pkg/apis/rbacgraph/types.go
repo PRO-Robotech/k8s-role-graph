@@ -184,6 +184,88 @@ type NonResourceURLEntry struct {
 	Roles []string
 }
 
+// ---------- RolePermissionsView types ----------
+
+type RoleScope string
+
+const (
+	RoleScopeCluster   RoleScope = "cluster"
+	RoleScopeNamespace RoleScope = "namespace"
+)
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// RolePermissionsView returns a detailed permission breakdown for a single Role or ClusterRole.
+type RolePermissionsView struct {
+	metav1.TypeMeta
+	metav1.ObjectMeta
+
+	Spec   RolePermissionsViewSpec
+	Status RolePermissionsViewStatus
+}
+
+type RolePermissionsViewSpec struct {
+	Role      RoleRef
+	Selector  Selector
+	MatchMode MatchMode
+}
+
+type RoleRefKind string
+
+const (
+	RoleRefKindClusterRole RoleRefKind = "clusterRole"
+	RoleRefKindRole        RoleRefKind = "role"
+)
+
+type RoleRef struct {
+	Kind      RoleRefKind
+	Name      string
+	Namespace string
+}
+
+type RolePermissionsViewStatus struct {
+	Name            string
+	Scope           RoleScope
+	APIGroups       []APIGroupPermissions
+	NonResourceURLs *NonResourceURLPermissions
+}
+
+type APIGroupPermissions struct {
+	APIGroup       string
+	ResourcesCount int
+	Resources      []ResourcePermissions
+}
+
+type ResourcePermissions struct {
+	Plural  string
+	Phantom bool
+	Verbs   map[string]VerbPermission
+}
+
+type NonResourceURLPermissions struct {
+	URLsCount int
+	URLs      []NonResourceURLPermissionEntry
+}
+
+type NonResourceURLPermissionEntry struct {
+	URL   string
+	Verbs map[string]VerbPermission
+}
+
+type VerbPermission struct {
+	Granted        bool
+	SupportedByAPI bool
+	Rules          []GrantingRule
+}
+
+type GrantingRule struct {
+	RuleIndex       int
+	APIGroups       []string
+	Resources       []string
+	Verbs           []string
+	NonResourceURLs []string
+}
+
 // ---------- spec methods ----------
 // SYNC: Keep EnsureDefaults/Validate in sync with pkg/apis/rbacgraph/v1alpha1/types.go
 

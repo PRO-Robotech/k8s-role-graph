@@ -206,6 +206,111 @@ func (NonResourceURLEntry) OpenAPIModelName() string {
 	return openAPIPrefix + "NonResourceURLEntry"
 }
 
+// ---------- RolePermissionsView types ----------
+
+// +enum
+type RoleScope string
+
+const (
+	RoleScopeCluster   RoleScope = "cluster"
+	RoleScopeNamespace RoleScope = "namespace"
+)
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// RolePermissionsView returns a detailed permission breakdown for a single Role or ClusterRole.
+type RolePermissionsView struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	Spec   RolePermissionsViewSpec   `json:"spec"`
+	Status RolePermissionsViewStatus `json:"status,omitempty"`
+}
+
+type RolePermissionsViewSpec struct {
+	Role      RoleRef   `json:"role"`
+	Selector  Selector  `json:"selector,omitempty"`
+	MatchMode MatchMode `json:"matchMode,omitempty"`
+}
+
+// +enum
+type RoleRefKind string
+
+const (
+	RoleRefKindClusterRole RoleRefKind = "clusterRole"
+	RoleRefKindRole        RoleRefKind = "role"
+)
+
+type RoleRef struct {
+	Kind      RoleRefKind `json:"kind"`
+	Name      string      `json:"name"`
+	Namespace string      `json:"namespace,omitempty"`
+}
+
+type RolePermissionsViewStatus struct {
+	Name            string                     `json:"name"`
+	Scope           RoleScope                  `json:"scope"`
+	APIGroups       []APIGroupPermissions      `json:"apiGroups"`
+	NonResourceURLs *NonResourceURLPermissions `json:"nonResourceUrls,omitempty"`
+}
+
+type APIGroupPermissions struct {
+	APIGroup       string                `json:"apiGroup"`
+	ResourcesCount int                   `json:"resourcesCount"`
+	Resources      []ResourcePermissions `json:"resources"`
+}
+
+type ResourcePermissions struct {
+	Plural  string                    `json:"plural"`
+	Phantom bool                      `json:"phantom,omitempty"`
+	Verbs   map[string]VerbPermission `json:"verbs"`
+}
+
+type NonResourceURLPermissions struct {
+	URLsCount int                             `json:"urlsCount"`
+	URLs      []NonResourceURLPermissionEntry `json:"urls"`
+}
+
+type NonResourceURLPermissionEntry struct {
+	URL   string                    `json:"url"`
+	Verbs map[string]VerbPermission `json:"verbs"`
+}
+
+type VerbPermission struct {
+	Granted        bool           `json:"granted"`
+	SupportedByAPI bool           `json:"supportedByApi"`
+	Rules          []GrantingRule `json:"rules,omitempty"`
+}
+
+type GrantingRule struct {
+	RuleIndex       int      `json:"ruleIndex"`
+	APIGroups       []string `json:"apiGroups,omitempty"`
+	Resources       []string `json:"resources,omitempty"`
+	Verbs           []string `json:"verbs"`
+	NonResourceURLs []string `json:"nonResourceURLs,omitempty"`
+}
+
+func (RolePermissionsView) OpenAPIModelName() string {
+	return openAPIPrefix + "RolePermissionsView"
+}
+func (RolePermissionsViewSpec) OpenAPIModelName() string {
+	return openAPIPrefix + "RolePermissionsViewSpec"
+}
+func (RolePermissionsViewStatus) OpenAPIModelName() string {
+	return openAPIPrefix + "RolePermissionsViewStatus"
+}
+func (RoleRef) OpenAPIModelName() string             { return openAPIPrefix + "RoleRef" }
+func (APIGroupPermissions) OpenAPIModelName() string { return openAPIPrefix + "APIGroupPermissions" }
+func (ResourcePermissions) OpenAPIModelName() string { return openAPIPrefix + "ResourcePermissions" }
+func (NonResourceURLPermissions) OpenAPIModelName() string {
+	return openAPIPrefix + "NonResourceURLPermissions"
+}
+func (NonResourceURLPermissionEntry) OpenAPIModelName() string {
+	return openAPIPrefix + "NonResourceURLPermissionEntry"
+}
+func (VerbPermission) OpenAPIModelName() string { return openAPIPrefix + "VerbPermission" }
+func (GrantingRule) OpenAPIModelName() string   { return openAPIPrefix + "GrantingRule" }
+
 func (r *RoleGraphReview) EnsureDefaults() {
 	if strings.TrimSpace(r.APIVersion) == "" {
 		r.APIVersion = APIVersionValue
