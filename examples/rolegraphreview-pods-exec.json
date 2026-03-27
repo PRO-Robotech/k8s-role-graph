@@ -1,0 +1,22 @@
+{
+  "apiVersion": "rbacgraph.incloud.io/v1alpha1",
+  "kind": "RoleGraphReview",
+  "metadata": {
+    "name": "pods-exec"
+  },
+  "spec": {
+    "selector": {
+      "apiGroups": [""],
+      "resources": ["pods/exec"],
+      "verbs": ["get", "create"],
+      "resourceNames": [],
+      "nonResourceURLs": []
+    },
+    "matchMode": "any",
+    "includeRuleMetadata": true,
+    "namespaceScope": {
+      "namespaces": [],
+      "strict": false
+    }
+  }
+}

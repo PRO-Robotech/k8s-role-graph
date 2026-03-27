@@ -18,6 +18,7 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 	scheme.AddKnownTypes(SchemeGroupVersion,
 		&RoleGraphReview{},
 		&NonResourceURLList{},
+		&RolePermissionsView{},
 	)
 	metav1.AddToGroupVersion(scheme, SchemeGroupVersion)
 
