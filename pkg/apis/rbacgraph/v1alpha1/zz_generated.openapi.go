@@ -349,11 +349,11 @@ func schema_pkg_apis_rbacgraph_v1alpha1_GraphNode(ref common.ReferenceCallback) 
 					},
 					"type": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Possible enum values:\n - `\"clusterRole\"`\n - `\"clusterRoleBinding\"`\n - `\"group\"`\n - `\"pod\"`\n - `\"podOverflow\"`\n - `\"role\"`\n - `\"roleBinding\"`\n - `\"serviceAccount\"`\n - `\"user\"`\n - `\"workload\"`\n - `\"workloadOverflow\"`",
+							Description: "Possible enum values:\n - `\"ClusterRole\"`\n - `\"ClusterRoleBinding\"`\n - `\"Group\"`\n - `\"Pod\"`\n - `\"PodOverflow\"`\n - `\"Role\"`\n - `\"RoleBinding\"`\n - `\"ServiceAccount\"`\n - `\"User\"`\n - `\"Workload\"`\n - `\"WorkloadOverflow\"`",
 							Default:     "",
 							Type:        []string{"string"},
 							Format:      "",
-							Enum:        []interface{}{"clusterRole", "clusterRoleBinding", "group", "pod", "podOverflow", "role", "roleBinding", "serviceAccount", "user", "workload", "workloadOverflow"},
+							Enum:        []interface{}{"ClusterRole", "ClusterRoleBinding", "Group", "Pod", "PodOverflow", "Role", "RoleBinding", "ServiceAccount", "User", "Workload", "WorkloadOverflow"},
 						},
 					},
 					"name": {
@@ -1129,11 +1129,11 @@ func schema_pkg_apis_rbacgraph_v1alpha1_RoleRef(ref common.ReferenceCallback) co
 				Properties: map[string]spec.Schema{
 					"kind": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Possible enum values:\n - `\"clusterRole\"`\n - `\"role\"`",
+							Description: "Possible enum values:\n - `\"ClusterRole\"`\n - `\"Role\"`",
 							Default:     "",
 							Type:        []string{"string"},
 							Format:      "",
-							Enum:        []interface{}{"clusterRole", "role"},
+							Enum:        []interface{}{"ClusterRole", "Role"},
 						},
 					},
 					"name": {

@@ -43,8 +43,9 @@ func bindingNodeID(binding *indexer.BindingRecord) string {
 }
 
 func subjectNodeID(subject rbacv1.Subject) string {
-	kind := subjectType(subject.Kind)
-	if kind == api.GraphNodeTypeServiceAccount && subject.Namespace != "" {
+	typ := subjectType(subject.Kind)
+	kind := strings.ToLower(string(typ))
+	if typ == api.GraphNodeTypeServiceAccount && subject.Namespace != "" {
 		return fmt.Sprintf("%s%s:%s/%s", nodeIDPrefixSubject, kind, subject.Namespace, subject.Name)
 	}
 

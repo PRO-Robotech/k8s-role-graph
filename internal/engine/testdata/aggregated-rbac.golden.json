@@ -6,12 +6,12 @@
     "nodes": [
       {
         "id": "role:clusterrole:aggregate-to-edit-source",
-        "type": "clusterRole",
+        "type": "ClusterRole",
         "name": "aggregate-to-edit-source"
       },
       {
         "id": "role:clusterrole:edit",
-        "type": "clusterRole",
+        "type": "ClusterRole",
         "name": "edit",
         "aggregated": true,
         "aggregationSources": [
@@ -28,12 +28,12 @@
       },
       {
         "id": "binding:clusterrolebinding:bind-edit",
-        "type": "clusterRoleBinding",
+        "type": "ClusterRoleBinding",
         "name": "bind-edit"
       },
       {
         "id": "subject:user:bob",
-        "type": "user",
+        "type": "User",
         "name": "bob"
       }
     ],

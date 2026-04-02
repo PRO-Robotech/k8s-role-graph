@@ -409,21 +409,21 @@
           "type": "boolean"
         },
         "type": {
-          "description": "Possible enum values:\n - `\"clusterRole\"`\n - `\"clusterRoleBinding\"`\n - `\"group\"`\n - `\"pod\"`\n - `\"podOverflow\"`\n - `\"role\"`\n - `\"roleBinding\"`\n - `\"serviceAccount\"`\n - `\"user\"`\n - `\"workload\"`\n - `\"workloadOverflow\"`",
+          "description": "Possible enum values:\n - `\"ClusterRole\"`\n - `\"ClusterRoleBinding\"`\n - `\"Group\"`\n - `\"Pod\"`\n - `\"PodOverflow\"`\n - `\"Role\"`\n - `\"RoleBinding\"`\n - `\"ServiceAccount\"`\n - `\"User\"`\n - `\"Workload\"`\n - `\"WorkloadOverflow\"`",
           "type": "string",
           "default": "",
           "enum": [
-            "clusterRole",
-            "clusterRoleBinding",
-            "group",
-            "pod",
-            "podOverflow",
-            "role",
-            "roleBinding",
-            "serviceAccount",
-            "user",
-            "workload",
-            "workloadOverflow"
+            "ClusterRole",
+            "ClusterRoleBinding",
+            "Group",
+            "Pod",
+            "PodOverflow",
+            "Role",
+            "RoleBinding",
+            "ServiceAccount",
+            "User",
+            "Workload",
+            "WorkloadOverflow"
           ]
         },
         "workloadKind": {

@@ -6,7 +6,7 @@
     "nodes": [
       {
         "id": "role:clusterrole:exec-role",
-        "type": "clusterRole",
+        "type": "ClusterRole",
         "name": "exec-role",
         "matchedRuleRefs": [
           {
@@ -19,12 +19,12 @@
       },
       {
         "id": "binding:clusterrolebinding:bind-exec",
-        "type": "clusterRoleBinding",
+        "type": "ClusterRoleBinding",
         "name": "bind-exec"
       },
       {
         "id": "subject:user:alice",
-        "type": "user",
+        "type": "User",
         "name": "alice"
       }
     ],

@@ -47,17 +47,17 @@ const (
 type GraphNodeType string
 
 const (
-	GraphNodeTypeRole               GraphNodeType = "role"
-	GraphNodeTypeClusterRole        GraphNodeType = "clusterRole"
-	GraphNodeTypeRoleBinding        GraphNodeType = "roleBinding"
-	GraphNodeTypeClusterRoleBinding GraphNodeType = "clusterRoleBinding"
-	GraphNodeTypeUser               GraphNodeType = "user"
-	GraphNodeTypeGroup              GraphNodeType = "group"
-	GraphNodeTypeServiceAccount     GraphNodeType = "serviceAccount"
-	GraphNodeTypePod                GraphNodeType = "pod"
-	GraphNodeTypeWorkload           GraphNodeType = "workload"
-	GraphNodeTypePodOverflow        GraphNodeType = "podOverflow"
-	GraphNodeTypeWorkloadOverflow   GraphNodeType = "workloadOverflow"
+	GraphNodeTypeRole               GraphNodeType = "Role"
+	GraphNodeTypeClusterRole        GraphNodeType = "ClusterRole"
+	GraphNodeTypeRoleBinding        GraphNodeType = "RoleBinding"
+	GraphNodeTypeClusterRoleBinding GraphNodeType = "ClusterRoleBinding"
+	GraphNodeTypeUser               GraphNodeType = "User"
+	GraphNodeTypeGroup              GraphNodeType = "Group"
+	GraphNodeTypeServiceAccount     GraphNodeType = "ServiceAccount"
+	GraphNodeTypePod                GraphNodeType = "Pod"
+	GraphNodeTypeWorkload           GraphNodeType = "Workload"
+	GraphNodeTypePodOverflow        GraphNodeType = "PodOverflow"
+	GraphNodeTypeWorkloadOverflow   GraphNodeType = "WorkloadOverflow"
 )
 
 // +enum
@@ -237,8 +237,8 @@ type RolePermissionsViewSpec struct {
 type RoleRefKind string
 
 const (
-	RoleRefKindClusterRole RoleRefKind = "clusterRole"
-	RoleRefKindRole        RoleRefKind = "role"
+	RoleRefKindClusterRole RoleRefKind = "ClusterRole"
+	RoleRefKindRole        RoleRefKind = "Role"
 )
 
 type RoleRef struct {
