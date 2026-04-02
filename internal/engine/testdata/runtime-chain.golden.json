@@ -11,7 +11,7 @@
     "nodes": [
       {
         "id": "role:clusterrole:exec-role",
-        "type": "clusterRole",
+        "type": "ClusterRole",
         "name": "exec-role",
         "matchedRuleRefs": [
           {
@@ -24,32 +24,32 @@
       },
       {
         "id": "binding:clusterrolebinding:bind-exec",
-        "type": "clusterRoleBinding",
+        "type": "ClusterRoleBinding",
         "name": "bind-exec"
       },
       {
         "id": "pod:team/running-pod",
-        "type": "pod",
+        "type": "Pod",
         "name": "running-pod",
         "namespace": "team",
         "podPhase": "Running"
       },
       {
-        "id": "subject:serviceAccount:team/demo-sa",
-        "type": "serviceAccount",
+        "id": "subject:serviceaccount:team/demo-sa",
+        "type": "ServiceAccount",
         "name": "demo-sa",
         "namespace": "team"
       },
       {
         "id": "workload:deployment:team/demo-deploy",
-        "type": "workload",
+        "type": "Workload",
         "name": "demo-deploy",
         "namespace": "team",
         "workloadKind": "Deployment"
       },
       {
         "id": "workload:replicaset:team/demo-rs",
-        "type": "workload",
+        "type": "Workload",
         "name": "demo-rs",
         "namespace": "team",
         "workloadKind": "ReplicaSet"
@@ -86,16 +86,16 @@
         "explain": "Owner reference chain"
       },
       {
-        "id": "edge:subject:serviceAccount:team/demo-sa-\u003epod:team/running-pod:runsAs",
-        "from": "subject:serviceAccount:team/demo-sa",
+        "id": "edge:subject:serviceaccount:team/demo-sa-\u003epod:team/running-pod:runsAs",
+        "from": "subject:serviceaccount:team/demo-sa",
         "to": "pod:team/running-pod",
         "type": "runsAs",
         "explain": "ServiceAccount used by pod"
       },
       {
-        "id": "edge:binding:clusterrolebinding:bind-exec-\u003esubject:serviceAccount:team/demo-sa:subjects",
+        "id": "edge:binding:clusterrolebinding:bind-exec-\u003esubject:serviceaccount:team/demo-sa:subjects",
         "from": "binding:clusterrolebinding:bind-exec",
-        "to": "subject:serviceAccount:team/demo-sa",
+        "to": "subject:serviceaccount:team/demo-sa",
         "type": "subjects",
         "explain": "Binding targets subject"
       }

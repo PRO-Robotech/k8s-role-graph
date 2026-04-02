@@ -35,7 +35,7 @@ func TestCreate_ClusterRole(t *testing.T) {
 
 	view := &rbacgraph.RolePermissionsView{
 		Spec: rbacgraph.RolePermissionsViewSpec{
-			Role: rbacgraph.RoleRef{Kind: "clusterRole", Name: "admin"},
+			Role: rbacgraph.RoleRef{Kind: "ClusterRole", Name: "admin"},
 		},
 	}
 
@@ -136,7 +136,7 @@ func TestCreate_NotFound(t *testing.T) {
 
 	view := &rbacgraph.RolePermissionsView{
 		Spec: rbacgraph.RolePermissionsViewSpec{
-			Role: rbacgraph.RoleRef{Kind: "clusterRole", Name: "nonexistent"},
+			Role: rbacgraph.RoleRef{Kind: "ClusterRole", Name: "nonexistent"},
 		},
 	}
 
@@ -161,7 +161,7 @@ func TestCreate_SelectorFilter(t *testing.T) {
 
 	view := &rbacgraph.RolePermissionsView{
 		Spec: rbacgraph.RolePermissionsViewSpec{
-			Role: rbacgraph.RoleRef{Kind: "clusterRole", Name: "admin"},
+			Role: rbacgraph.RoleRef{Kind: "ClusterRole", Name: "admin"},
 			Selector: rbacgraph.Selector{
 				Resources: []string{"pods"},
 			},
@@ -194,7 +194,7 @@ func TestCreate_ValidationErrors(t *testing.T) {
 	}{
 		{
 			name: "empty name",
-			spec: rbacgraph.RolePermissionsViewSpec{Role: rbacgraph.RoleRef{Kind: "clusterRole"}},
+			spec: rbacgraph.RolePermissionsViewSpec{Role: rbacgraph.RoleRef{Kind: "ClusterRole"}},
 		},
 		{
 			name: "invalid kind",
