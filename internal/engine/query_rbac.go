@@ -47,7 +47,13 @@ func (qc *queryContext) buildRBACGraph(roleIDs []indexer.RoleID) {
 			if !ok {
 				continue
 			}
-			sourceNodeID := qc.upsertRoleNode(sourceRole, qc.snapshot.AggregatedRoleSources[sourceRoleID], nil)
+
+			sourceMatches := matchRole(sourceRole, qc.spec)
+			if len(sourceMatches) == 0 {
+				continue
+			}
+
+			sourceNodeID := qc.upsertRoleNode(sourceRole, qc.snapshot.AggregatedRoleSources[sourceRoleID], sourceMatches)
 			qc.appendEdgeIfMissing(api.GraphEdge{
 				ID:      edgeIDFor(sourceNodeID, roleNodeID, api.GraphEdgeTypeAggregates),
 				From:    sourceNodeID,
