@@ -733,6 +733,8 @@ func autoConvert_v1alpha1_RolePermissionsViewSpec_To_rbacgraph_RolePermissionsVi
 		return err
 	}
 	out.MatchMode = rbacgraph.MatchMode(in.MatchMode)
+	out.WildcardMode = rbacgraph.WildcardMode(in.WildcardMode)
+	out.FilterPhantomAPIs = in.FilterPhantomAPIs
 	return nil
 }
 
@@ -749,6 +751,8 @@ func autoConvert_rbacgraph_RolePermissionsViewSpec_To_v1alpha1_RolePermissionsVi
 		return err
 	}
 	out.MatchMode = MatchMode(in.MatchMode)
+	out.WildcardMode = WildcardMode(in.WildcardMode)
+	out.FilterPhantomAPIs = in.FilterPhantomAPIs
 	return nil
 }
 

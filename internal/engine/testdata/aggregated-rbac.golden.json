@@ -7,7 +7,15 @@
       {
         "id": "role:clusterrole:aggregate-to-edit-source",
         "type": "ClusterRole",
-        "name": "aggregate-to-edit-source"
+        "name": "aggregate-to-edit-source",
+        "matchedRuleRefs": [
+          {
+            "resource": "pods",
+            "subresource": "exec",
+            "verb": "get",
+            "sourceObjectUID": "src"
+          }
+        ]
       },
       {
         "id": "role:clusterrole:edit",

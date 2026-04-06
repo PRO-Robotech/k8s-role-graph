@@ -75,6 +75,12 @@ func (r *REST) Create(_ context.Context, obj runtime.Object, _ rest.ValidateObje
 	if spec.MatchMode == "" {
 		spec.MatchMode = rbacgraph.MatchModeAny
 	}
+	if spec.WildcardMode == "" {
+		spec.WildcardMode = rbacgraph.WildcardModeExpand
+	}
+	if spec.WildcardMode != rbacgraph.WildcardModeExpand && spec.WildcardMode != rbacgraph.WildcardModeExact {
+		return nil, apierrors.NewBadRequest(fmt.Sprintf("invalid wildcardMode %q", spec.WildcardMode))
+	}
 
 	snapshot := r.indexer.Snapshot()
 	roleID := indexer.RecID(idxKind, spec.Role.Namespace, spec.Role.Name)
@@ -116,17 +122,21 @@ func buildStatus(
 	urlVerbs := make(map[string]map[string][]verbGrant)
 
 	hasSelector := hasSelectorFilter(spec.Selector)
+	expandWildcards := spec.WildcardMode != rbacgraph.WildcardModeExact
 
 	for ruleIdx, rule := range role.Rules {
 		grant := verbGrant{ruleIndex: ruleIdx}
 
 		// --- Resource rules ---
 		if len(rule.Resources) > 0 {
-			groups := expandGroups(rule.APIGroups, discovery)
+			groups := expandGroups(rule.APIGroups, discovery, expandWildcards)
 			for _, group := range groups {
-				resources := expandResources(group, rule.Resources, discovery)
+				resources := expandResources(group, rule.Resources, discovery, expandWildcards)
 				for _, res := range resources {
-					verbs := expandVerbs(group, res, rule.Verbs, discovery)
+					if spec.FilterPhantomAPIs && isPhantomResource(discovery, group, res) {
+						continue
+					}
+					verbs := expandVerbs(group, res, rule.Verbs, discovery, expandWildcards)
 					if hasSelector && !matchesSelector(group, res, verbs, spec.Selector, spec.MatchMode) {
 						continue
 					}
@@ -180,8 +190,12 @@ func appendGrant(grants []verbGrant, g verbGrant) []verbGrant {
 
 // --- Wildcard expansion ---
 
-func expandGroups(apiGroups []string, discovery *indexer.APIDiscoveryCache) []string {
-	if discovery == nil || !slices.Contains(apiGroups, "*") {
+// expandGroups expands the "*" wildcard against discovery only when
+// expandWildcards is true. In exact mode the "*" token is preserved as-is so
+// that downstream filtering treats it literally instead of fanning out to all
+// known API groups.
+func expandGroups(apiGroups []string, discovery *indexer.APIDiscoveryCache, expandWildcards bool) []string {
+	if !expandWildcards || discovery == nil || !slices.Contains(apiGroups, "*") {
 		return apiGroups
 	}
 	groups := make([]string, 0, len(discovery.ResourcesByGroup))
@@ -193,8 +207,8 @@ func expandGroups(apiGroups []string, discovery *indexer.APIDiscoveryCache) []st
 	return groups
 }
 
-func expandResources(apiGroup string, resources []string, discovery *indexer.APIDiscoveryCache) []string {
-	if discovery == nil || !slices.Contains(resources, "*") {
+func expandResources(apiGroup string, resources []string, discovery *indexer.APIDiscoveryCache, expandWildcards bool) []string {
+	if !expandWildcards || discovery == nil || !slices.Contains(resources, "*") {
 		return resources
 	}
 	groupResources := discovery.ResourcesByGroup[apiGroup]
@@ -210,8 +224,8 @@ func expandResources(apiGroup string, resources []string, discovery *indexer.API
 	return out
 }
 
-func expandVerbs(apiGroup, resource string, verbs []string, discovery *indexer.APIDiscoveryCache) []string {
-	if discovery == nil || !slices.Contains(verbs, "*") {
+func expandVerbs(apiGroup, resource string, verbs []string, discovery *indexer.APIDiscoveryCache, expandWildcards bool) []string {
+	if !expandWildcards || discovery == nil || !slices.Contains(verbs, "*") {
 		return verbs
 	}
 	groupVerbs, ok := discovery.VerbsByGroupResource[apiGroup]

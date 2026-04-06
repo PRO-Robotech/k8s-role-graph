@@ -21,6 +21,41 @@ func newTestREST(roles map[indexer.RoleID]*indexer.RoleRecord) *REST {
 	return NewREST(idx)
 }
 
+// newTestRESTWithDiscovery returns a REST handler whose underlying indexer has
+// a synthetic discovery cache. The cache contains the supplied groups and the
+// resources/verbs registered for each group.
+func newTestRESTWithDiscovery(
+	roles map[indexer.RoleID]*indexer.RoleRecord,
+	resourcesByGroup map[string]map[string][]string,
+) *REST {
+	idx := indexer.New(fake.NewSimpleClientset(), 0)
+	idx.SetSnapshotForTest(&indexer.Snapshot{RolesByID: roles})
+
+	cache := &indexer.APIDiscoveryCache{
+		Groups:               make(map[string]struct{}),
+		ResourcesByGroup:     make(map[string]map[string]struct{}),
+		VerbsByGroupResource: make(map[string]map[string][]string),
+		AllResources:         make(map[string]struct{}),
+		AllVerbs:             make(map[string]struct{}),
+	}
+	for group, resources := range resourcesByGroup {
+		cache.Groups[group] = struct{}{}
+		cache.ResourcesByGroup[group] = make(map[string]struct{})
+		cache.VerbsByGroupResource[group] = make(map[string][]string)
+		for resource, verbs := range resources {
+			cache.ResourcesByGroup[group][resource] = struct{}{}
+			cache.AllResources[resource] = struct{}{}
+			cache.VerbsByGroupResource[group][resource] = verbs
+			for _, v := range verbs {
+				cache.AllVerbs[v] = struct{}{}
+			}
+		}
+	}
+	idx.SetDiscoveryCacheForTest(cache)
+
+	return NewREST(idx)
+}
+
 func TestCreate_ClusterRole(t *testing.T) {
 	r := newTestREST(map[indexer.RoleID]*indexer.RoleRecord{
 		"clusterrole:admin": {
@@ -186,7 +221,9 @@ func TestCreate_SelectorFilter(t *testing.T) {
 }
 
 func TestCreate_ValidationErrors(t *testing.T) {
-	r := newTestREST(map[indexer.RoleID]*indexer.RoleRecord{})
+	r := newTestREST(map[indexer.RoleID]*indexer.RoleRecord{
+		"clusterrole:dummy": {Kind: "ClusterRole", Name: "dummy"},
+	})
 
 	tests := []struct {
 		name string
@@ -204,6 +241,13 @@ func TestCreate_ValidationErrors(t *testing.T) {
 			name: "role without namespace",
 			spec: rbacgraph.RolePermissionsViewSpec{Role: rbacgraph.RoleRef{Kind: "role", Name: "test", Namespace: ""}},
 		},
+		{
+			name: "invalid wildcardMode",
+			spec: rbacgraph.RolePermissionsViewSpec{
+				Role:         rbacgraph.RoleRef{Kind: "ClusterRole", Name: "dummy"},
+				WildcardMode: "bogus",
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -214,5 +258,179 @@ func TestCreate_ValidationErrors(t *testing.T) {
 				t.Error("expected error")
 			}
 		})
+	}
+}
+
+// TestCreate_WildcardMode_Exact verifies that exact mode preserves "*" as a
+// literal token instead of fanning it out via discovery, so the response shows
+// a single "*" pseudo-resource rather than every known API.
+func TestCreate_WildcardMode_Exact(t *testing.T) {
+	r := newTestRESTWithDiscovery(
+		map[indexer.RoleID]*indexer.RoleRecord{
+			"clusterrole:wildcard-admin": {
+				Kind: "ClusterRole",
+				Name: "wildcard-admin",
+				Rules: []rbacv1.PolicyRule{
+					{APIGroups: []string{"*"}, Resources: []string{"*"}, Verbs: []string{"*"}},
+				},
+			},
+		},
+		map[string]map[string][]string{
+			"": {
+				"pods":     {"get", "list", "create"},
+				"services": {"get", "list"},
+			},
+			"apps": {
+				"deployments": {"get", "list"},
+			},
+		},
+	)
+
+	view := &rbacgraph.RolePermissionsView{
+		Spec: rbacgraph.RolePermissionsViewSpec{
+			Role:         rbacgraph.RoleRef{Kind: "ClusterRole", Name: "wildcard-admin"},
+			WildcardMode: rbacgraph.WildcardModeExact,
+		},
+	}
+
+	obj, err := r.Create(context.Background(), view, nil, &metav1.CreateOptions{})
+	if err != nil {
+		t.Fatalf("Create() error: %v", err)
+	}
+	result := obj.(*rbacgraph.RolePermissionsView)
+
+	// In exact mode the wildcard rule must collapse to a single (*, *, *) entry
+	// instead of being expanded against every group/resource in discovery.
+	if len(result.Status.APIGroups) != 1 {
+		t.Fatalf("expected 1 apiGroup in exact mode, got %d", len(result.Status.APIGroups))
+	}
+	ag := result.Status.APIGroups[0]
+	if ag.ResourcesCount != 1 || ag.Resources[0].Plural != "*" {
+		t.Fatalf("expected single '*' resource, got %+v", ag.Resources)
+	}
+	if _, ok := ag.Resources[0].Verbs["*"]; !ok {
+		t.Errorf("expected '*' verb in exact mode, got verbs=%v", ag.Resources[0].Verbs)
+	}
+}
+
+// TestCreate_WildcardMode_ExpandDefault confirms that the default expand mode
+// still resolves "*" against discovery (preserving today's behaviour for
+// callers that don't pass wildcardMode).
+func TestCreate_WildcardMode_ExpandDefault(t *testing.T) {
+	r := newTestRESTWithDiscovery(
+		map[indexer.RoleID]*indexer.RoleRecord{
+			"clusterrole:wildcard-admin": {
+				Kind: "ClusterRole",
+				Name: "wildcard-admin",
+				Rules: []rbacv1.PolicyRule{
+					{APIGroups: []string{""}, Resources: []string{"*"}, Verbs: []string{"get"}},
+				},
+			},
+		},
+		map[string]map[string][]string{
+			"": {
+				"pods":     {"get", "list"},
+				"services": {"get", "list"},
+			},
+		},
+	)
+
+	view := &rbacgraph.RolePermissionsView{
+		Spec: rbacgraph.RolePermissionsViewSpec{
+			Role: rbacgraph.RoleRef{Kind: "ClusterRole", Name: "wildcard-admin"},
+			// WildcardMode left empty → defaults to expand.
+		},
+	}
+
+	obj, err := r.Create(context.Background(), view, nil, &metav1.CreateOptions{})
+	if err != nil {
+		t.Fatalf("Create() error: %v", err)
+	}
+	result := obj.(*rbacgraph.RolePermissionsView)
+
+	if len(result.Status.APIGroups) != 1 || result.Status.APIGroups[0].ResourcesCount != 2 {
+		t.Fatalf("expected expansion to 2 resources, got %+v", result.Status.APIGroups)
+	}
+}
+
+// TestCreate_FilterPhantomAPIs verifies that resources missing from discovery
+// (e.g. CRDs that are no longer installed) are dropped when the caller asks
+// for the "real by OpenAPI" view.
+func TestCreate_FilterPhantomAPIs(t *testing.T) {
+	r := newTestRESTWithDiscovery(
+		map[indexer.RoleID]*indexer.RoleRecord{
+			"clusterrole:operator": {
+				Kind: "ClusterRole",
+				Name: "operator",
+				Rules: []rbacv1.PolicyRule{
+					{APIGroups: []string{""}, Resources: []string{"pods"}, Verbs: []string{"get"}},
+					// "ghosts" is a phantom resource — not in discovery.
+					{APIGroups: []string{"missing.example.com"}, Resources: []string{"ghosts"}, Verbs: []string{"get"}},
+				},
+			},
+		},
+		map[string]map[string][]string{
+			"": {"pods": {"get", "list"}},
+		},
+	)
+
+	view := &rbacgraph.RolePermissionsView{
+		Spec: rbacgraph.RolePermissionsViewSpec{
+			Role:              rbacgraph.RoleRef{Kind: "ClusterRole", Name: "operator"},
+			FilterPhantomAPIs: true,
+		},
+	}
+
+	obj, err := r.Create(context.Background(), view, nil, &metav1.CreateOptions{})
+	if err != nil {
+		t.Fatalf("Create() error: %v", err)
+	}
+	result := obj.(*rbacgraph.RolePermissionsView)
+
+	if len(result.Status.APIGroups) != 1 {
+		t.Fatalf("expected only the real apiGroup after phantom filter, got %d: %+v",
+			len(result.Status.APIGroups), result.Status.APIGroups)
+	}
+	if result.Status.APIGroups[0].APIGroup != "core" {
+		t.Errorf("expected core group to remain, got %q", result.Status.APIGroups[0].APIGroup)
+	}
+}
+
+// TestCreate_FilterPhantomAPIs_Disabled is the negative case: with the flag
+// off the phantom rule still appears, just marked Phantom=true.
+func TestCreate_FilterPhantomAPIs_Disabled(t *testing.T) {
+	r := newTestRESTWithDiscovery(
+		map[indexer.RoleID]*indexer.RoleRecord{
+			"clusterrole:operator": {
+				Kind: "ClusterRole",
+				Name: "operator",
+				Rules: []rbacv1.PolicyRule{
+					{APIGroups: []string{"missing.example.com"}, Resources: []string{"ghosts"}, Verbs: []string{"get"}},
+				},
+			},
+		},
+		map[string]map[string][]string{
+			"": {"pods": {"get"}},
+		},
+	)
+
+	view := &rbacgraph.RolePermissionsView{
+		Spec: rbacgraph.RolePermissionsViewSpec{
+			Role: rbacgraph.RoleRef{Kind: "ClusterRole", Name: "operator"},
+			// FilterPhantomAPIs left off.
+		},
+	}
+
+	obj, err := r.Create(context.Background(), view, nil, &metav1.CreateOptions{})
+	if err != nil {
+		t.Fatalf("Create() error: %v", err)
+	}
+	result := obj.(*rbacgraph.RolePermissionsView)
+
+	if len(result.Status.APIGroups) != 1 {
+		t.Fatalf("expected phantom group to remain, got %d", len(result.Status.APIGroups))
+	}
+	if !result.Status.APIGroups[0].Resources[0].Phantom {
+		t.Errorf("expected phantom flag to be set on the phantom resource")
 	}
 }
