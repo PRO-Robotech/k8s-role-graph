@@ -205,9 +205,11 @@ type RolePermissionsView struct {
 }
 
 type RolePermissionsViewSpec struct {
-	Role      RoleRef
-	Selector  Selector
-	MatchMode MatchMode
+	Role              RoleRef
+	Selector          Selector
+	MatchMode         MatchMode
+	WildcardMode      WildcardMode
+	FilterPhantomAPIs bool
 }
 
 type RoleRefKind string

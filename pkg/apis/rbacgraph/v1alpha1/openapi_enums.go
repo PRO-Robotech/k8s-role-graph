@@ -104,6 +104,8 @@ func injectEnumsIntoStructFields(defs map[string]common.OpenAPIDefinition) {
 	patchField("RoleGraphReviewSpec", "matchMode", []any{string(MatchModeAny), string(MatchModeAll)})
 	patchField("RoleGraphReviewSpec", "podPhaseMode", []any{string(PodPhaseModeActive), string(PodPhaseModeRunning), string(PodPhaseModeAll)})
 	patchField("RoleGraphReviewSpec", "wildcardMode", []any{string(WildcardModeExpand), string(WildcardModeExact)})
+	patchField("RolePermissionsViewSpec", "matchMode", []any{string(MatchModeAny), string(MatchModeAll)})
+	patchField("RolePermissionsViewSpec", "wildcardMode", []any{string(WildcardModeExpand), string(WildcardModeExact)})
 	patchField("GraphNode", "type", []any{
 		string(GraphNodeTypeRole), string(GraphNodeTypeClusterRole),
 		string(GraphNodeTypeRoleBinding), string(GraphNodeTypeClusterRoleBinding),
