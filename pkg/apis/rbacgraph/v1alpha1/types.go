@@ -228,9 +228,11 @@ type RolePermissionsView struct {
 }
 
 type RolePermissionsViewSpec struct {
-	Role      RoleRef   `json:"role"`
-	Selector  Selector  `json:"selector,omitempty"`
-	MatchMode MatchMode `json:"matchMode,omitempty"`
+	Role              RoleRef      `json:"role"`
+	Selector          Selector     `json:"selector,omitempty"`
+	MatchMode         MatchMode    `json:"matchMode,omitempty"`
+	WildcardMode      WildcardMode `json:"wildcardMode,omitempty"`
+	FilterPhantomAPIs bool         `json:"filterPhantomAPIs,omitempty"`
 }
 
 // +enum

@@ -75,6 +75,9 @@ func (r *REST) Create(_ context.Context, obj runtime.Object, _ rest.ValidateObje
 	if spec.MatchMode == "" {
 		spec.MatchMode = rbacgraph.MatchModeAny
 	}
+	if spec.WildcardMode == "" {
+		spec.WildcardMode = rbacgraph.WildcardModeExpand
+	}
 
 	snapshot := r.indexer.Snapshot()
 	roleID := indexer.RecID(idxKind, spec.Role.Namespace, spec.Role.Name)
@@ -122,11 +125,11 @@ func buildStatus(
 
 		// --- Resource rules ---
 		if len(rule.Resources) > 0 {
-			groups := expandGroups(rule.APIGroups, discovery)
+			groups := expandGroups(rule.APIGroups, spec.WildcardMode, discovery)
 			for _, group := range groups {
-				resources := expandResources(group, rule.Resources, discovery)
+				resources := expandResources(group, rule.Resources, spec.WildcardMode, discovery)
 				for _, res := range resources {
-					verbs := expandVerbs(group, res, rule.Verbs, discovery)
+					verbs := expandVerbs(group, res, rule.Verbs, spec.WildcardMode, discovery)
 					if hasSelector && !matchesSelector(group, res, verbs, spec.Selector, spec.MatchMode) {
 						continue
 					}
@@ -162,7 +165,7 @@ func buildStatus(
 	return rbacgraph.RolePermissionsViewStatus{
 		Name:            role.Name,
 		Scope:           scope,
-		APIGroups:       buildAPIGroups(resourceVerbs, role, discovery),
+		APIGroups:       buildAPIGroups(resourceVerbs, role, discovery, spec.FilterPhantomAPIs),
 		NonResourceURLs: buildNonResourceURLs(urlVerbs, role),
 	}
 }
@@ -180,8 +183,8 @@ func appendGrant(grants []verbGrant, g verbGrant) []verbGrant {
 
 // --- Wildcard expansion ---
 
-func expandGroups(apiGroups []string, discovery *indexer.APIDiscoveryCache) []string {
-	if discovery == nil || !slices.Contains(apiGroups, "*") {
+func expandGroups(apiGroups []string, wildcardMode rbacgraph.WildcardMode, discovery *indexer.APIDiscoveryCache) []string {
+	if wildcardMode != rbacgraph.WildcardModeExpand || discovery == nil || !slices.Contains(apiGroups, "*") {
 		return apiGroups
 	}
 	groups := make([]string, 0, len(discovery.ResourcesByGroup))
@@ -193,8 +196,13 @@ func expandGroups(apiGroups []string, discovery *indexer.APIDiscoveryCache) []st
 	return groups
 }
 
-func expandResources(apiGroup string, resources []string, discovery *indexer.APIDiscoveryCache) []string {
-	if discovery == nil || !slices.Contains(resources, "*") {
+func expandResources(
+	apiGroup string,
+	resources []string,
+	wildcardMode rbacgraph.WildcardMode,
+	discovery *indexer.APIDiscoveryCache,
+) []string {
+	if wildcardMode != rbacgraph.WildcardModeExpand || discovery == nil || !slices.Contains(resources, "*") {
 		return resources
 	}
 	groupResources := discovery.ResourcesByGroup[apiGroup]
@@ -210,8 +218,13 @@ func expandResources(apiGroup string, resources []string, discovery *indexer.API
 	return out
 }
 
-func expandVerbs(apiGroup, resource string, verbs []string, discovery *indexer.APIDiscoveryCache) []string {
-	if discovery == nil || !slices.Contains(verbs, "*") {
+func expandVerbs(
+	apiGroup, resource string,
+	verbs []string,
+	wildcardMode rbacgraph.WildcardMode,
+	discovery *indexer.APIDiscoveryCache,
+) []string {
+	if wildcardMode != rbacgraph.WildcardModeExpand || discovery == nil || !slices.Contains(verbs, "*") {
 		return verbs
 	}
 	groupVerbs, ok := discovery.VerbsByGroupResource[apiGroup]
@@ -279,9 +292,18 @@ func containsCI(haystack []string, needle string) bool {
 
 // --- Response builders ---
 
-func buildAPIGroups(resourceVerbs map[resourceKey]map[string][]verbGrant, role *indexer.RoleRecord, discovery *indexer.APIDiscoveryCache) []rbacgraph.APIGroupPermissions {
+func buildAPIGroups(
+	resourceVerbs map[resourceKey]map[string][]verbGrant,
+	role *indexer.RoleRecord,
+	discovery *indexer.APIDiscoveryCache,
+	filterPhantomAPIs bool,
+) []rbacgraph.APIGroupPermissions {
 	groupMap := make(map[string][]rbacgraph.ResourcePermissions)
 	for key, verbs := range resourceVerbs {
+		isPhantom := isPhantomResource(discovery, key.apiGroup, key.resource)
+		if filterPhantomAPIs && isPhantom {
+			continue
+		}
 		verbPerms := make(map[string]rbacgraph.VerbPermission, len(verbs))
 		for v, grants := range verbs {
 			verbPerms[v] = rbacgraph.VerbPermission{
@@ -292,7 +314,7 @@ func buildAPIGroups(resourceVerbs map[resourceKey]map[string][]verbGrant, role *
 		}
 		groupMap[key.apiGroup] = append(groupMap[key.apiGroup], rbacgraph.ResourcePermissions{
 			Plural:  key.resource,
-			Phantom: isPhantomResource(discovery, key.apiGroup, key.resource),
+			Phantom: isPhantom,
 			Verbs:   verbPerms,
 		})
 	}

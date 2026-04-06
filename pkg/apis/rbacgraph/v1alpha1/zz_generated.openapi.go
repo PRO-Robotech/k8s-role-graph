@@ -1063,6 +1063,20 @@ func schema_pkg_apis_rbacgraph_v1alpha1_RolePermissionsViewSpec(ref common.Refer
 							Enum:        []interface{}{"all", "any"},
 						},
 					},
+					"wildcardMode": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Possible enum values:\n - `\"exact\"`\n - `\"expand\"`",
+							Type:        []string{"string"},
+							Format:      "",
+							Enum:        []interface{}{"exact", "expand"},
+						},
+					},
+					"filterPhantomAPIs": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"boolean"},
+							Format: "",
+						},
+					},
 				},
 				Required: []string{"role"},
 			},

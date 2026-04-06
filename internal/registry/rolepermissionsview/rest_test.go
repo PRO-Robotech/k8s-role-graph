@@ -216,3 +216,161 @@ func TestCreate_ValidationErrors(t *testing.T) {
 		})
 	}
 }
+
+func TestCreate_DefaultsWildcardModeToExpand(t *testing.T) {
+	r := newTestREST(map[indexer.RoleID]*indexer.RoleRecord{
+		"clusterrole:wildcard": {
+			Kind: "ClusterRole",
+			Name: "wildcard",
+			Rules: []rbacv1.PolicyRule{
+				{APIGroups: []string{""}, Resources: []string{"*"}, Verbs: []string{"*"}},
+			},
+		},
+	})
+	r.indexer.SetDiscoveryCacheForTest(&indexer.APIDiscoveryCache{
+		ResourcesByGroup: map[string]map[string]struct{}{
+			"": {
+				"pods":     struct{}{},
+				"services": struct{}{},
+			},
+		},
+		VerbsByGroupResource: map[string]map[string][]string{
+			"": {
+				"pods":     {"get", "list"},
+				"services": {"get", "list"},
+			},
+		},
+	})
+
+	obj, err := r.Create(context.Background(), &rbacgraph.RolePermissionsView{
+		Spec: rbacgraph.RolePermissionsViewSpec{
+			Role: rbacgraph.RoleRef{Kind: "ClusterRole", Name: "wildcard"},
+		},
+	}, nil, &metav1.CreateOptions{})
+	if err != nil {
+		t.Fatalf("Create() error: %v", err)
+	}
+
+	result := obj.(*rbacgraph.RolePermissionsView)
+	if len(result.Status.APIGroups) == 0 {
+		t.Fatal("expected expanded resources for default wildcard mode")
+	}
+	if result.Status.APIGroups[0].ResourcesCount == 0 {
+		t.Fatal("expected at least one expanded resource")
+	}
+}
+
+func TestCreate_WildcardModeExactPreservesWildcards(t *testing.T) {
+	r := newTestREST(map[indexer.RoleID]*indexer.RoleRecord{
+		"clusterrole:wildcard": {
+			Kind: "ClusterRole",
+			Name: "wildcard",
+			Rules: []rbacv1.PolicyRule{
+				{APIGroups: []string{""}, Resources: []string{"*"}, Verbs: []string{"*"}},
+			},
+		},
+	})
+	r.indexer.SetDiscoveryCacheForTest(&indexer.APIDiscoveryCache{
+		ResourcesByGroup: map[string]map[string]struct{}{
+			"": {
+				"pods":     struct{}{},
+				"services": struct{}{},
+			},
+		},
+		VerbsByGroupResource: map[string]map[string][]string{
+			"": {
+				"pods":     {"get", "list"},
+				"services": {"get", "list"},
+			},
+		},
+	})
+
+	obj, err := r.Create(context.Background(), &rbacgraph.RolePermissionsView{
+		Spec: rbacgraph.RolePermissionsViewSpec{
+			Role:         rbacgraph.RoleRef{Kind: "ClusterRole", Name: "wildcard"},
+			WildcardMode: rbacgraph.WildcardModeExact,
+		},
+	}, nil, &metav1.CreateOptions{})
+	if err != nil {
+		t.Fatalf("Create() error: %v", err)
+	}
+
+	result := obj.(*rbacgraph.RolePermissionsView)
+	if len(result.Status.APIGroups) != 1 {
+		t.Fatalf("expected 1 API group, got %d", len(result.Status.APIGroups))
+	}
+	if len(result.Status.APIGroups[0].Resources) != 1 {
+		t.Fatalf("expected 1 wildcard resource, got %d", len(result.Status.APIGroups[0].Resources))
+	}
+	resource := result.Status.APIGroups[0].Resources[0]
+	if resource.Plural != "*" {
+		t.Fatalf("expected wildcard resource, got %q", resource.Plural)
+	}
+	if _, ok := resource.Verbs["*"]; !ok {
+		t.Fatal(`expected wildcard verb "*" to be preserved`)
+	}
+}
+
+func TestCreate_FilterPhantomAPIs(t *testing.T) {
+	r := newTestREST(map[indexer.RoleID]*indexer.RoleRecord{
+		"clusterrole:phantom": {
+			Kind: "ClusterRole",
+			Name: "phantom",
+			Rules: []rbacv1.PolicyRule{
+				{APIGroups: []string{""}, Resources: []string{"pods", "widgets"}, Verbs: []string{"get"}},
+			},
+		},
+	})
+
+	r.indexer.SetDiscoveryCacheForTest(&indexer.APIDiscoveryCache{
+		ResourcesByGroup: map[string]map[string]struct{}{
+			"": {
+				"pods": struct{}{},
+			},
+		},
+		VerbsByGroupResource: map[string]map[string][]string{
+			"": {
+				"pods": {"get", "list"},
+			},
+		},
+	})
+
+	t.Run("disabled preserves phantom resources", func(t *testing.T) {
+		obj, err := r.Create(context.Background(), &rbacgraph.RolePermissionsView{
+			Spec: rbacgraph.RolePermissionsViewSpec{
+				Role:              rbacgraph.RoleRef{Kind: "ClusterRole", Name: "phantom"},
+				FilterPhantomAPIs: false,
+			},
+		}, nil, &metav1.CreateOptions{})
+		if err != nil {
+			t.Fatalf("Create() error: %v", err)
+		}
+
+		result := obj.(*rbacgraph.RolePermissionsView)
+		resources := result.Status.APIGroups[0].Resources
+		if len(resources) != 2 {
+			t.Fatalf("expected phantom resource to remain, got %d resources", len(resources))
+		}
+	})
+
+	t.Run("enabled removes phantom resources", func(t *testing.T) {
+		obj, err := r.Create(context.Background(), &rbacgraph.RolePermissionsView{
+			Spec: rbacgraph.RolePermissionsViewSpec{
+				Role:              rbacgraph.RoleRef{Kind: "ClusterRole", Name: "phantom"},
+				FilterPhantomAPIs: true,
+			},
+		}, nil, &metav1.CreateOptions{})
+		if err != nil {
+			t.Fatalf("Create() error: %v", err)
+		}
+
+		result := obj.(*rbacgraph.RolePermissionsView)
+		resources := result.Status.APIGroups[0].Resources
+		if len(resources) != 1 {
+			t.Fatalf("expected phantom resource to be filtered, got %d resources", len(resources))
+		}
+		if resources[0].Plural != "pods" {
+			t.Fatalf("expected remaining resource pods, got %q", resources[0].Plural)
+		}
+	})
+}
