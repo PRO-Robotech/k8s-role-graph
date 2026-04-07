@@ -124,11 +124,19 @@ func buildStatus(
 	hasSelector := hasSelectorFilter(spec.Selector)
 	expandWildcards := spec.WildcardMode != rbacgraph.WildcardModeExact
 
+	resourceSelectorActive := len(spec.Selector.APIGroups) > 0 ||
+		len(spec.Selector.Resources) > 0 ||
+		len(spec.Selector.Verbs) > 0 ||
+		len(spec.Selector.ResourceNames) > 0
+	urlSelectorActive := len(spec.Selector.NonResourceURLs) > 0
+	skipNonResourceRules := hasSelector && resourceSelectorActive && !urlSelectorActive
+	skipResourceRules := hasSelector && urlSelectorActive && !resourceSelectorActive
+
 	for ruleIdx, rule := range role.Rules {
 		grant := verbGrant{ruleIndex: ruleIdx}
 
 		// --- Resource rules ---
-		if len(rule.Resources) > 0 {
+		if len(rule.Resources) > 0 && !skipResourceRules {
 			groups := expandGroups(rule.APIGroups, discovery, expandWildcards)
 			for _, group := range groups {
 				resources := expandResources(group, rule.Resources, discovery, expandWildcards)
@@ -140,11 +148,20 @@ func buildStatus(
 					if hasSelector && !matchesSelector(group, res, verbs, spec.Selector, spec.MatchMode) {
 						continue
 					}
+
+					emittedVerbs := verbs
+					if hasSelector && len(spec.Selector.Verbs) > 0 {
+						emittedVerbs = intersectVerbs(verbs, spec.Selector.Verbs)
+						if len(emittedVerbs) == 0 {
+							continue
+						}
+					}
+
 					key := resourceKey{apiGroup: group, resource: res}
 					if resourceVerbs[key] == nil {
 						resourceVerbs[key] = make(map[string][]verbGrant)
 					}
-					for _, v := range verbs {
+					for _, v := range emittedVerbs {
 						resourceVerbs[key][v] = appendGrant(resourceVerbs[key][v], grant)
 					}
 				}
@@ -152,7 +169,7 @@ func buildStatus(
 		}
 
 		// --- NonResourceURL rules ---
-		if len(rule.NonResourceURLs) == 0 {
+		if len(rule.NonResourceURLs) == 0 || skipNonResourceRules {
 			continue
 		}
 		filterURLs := hasSelector && len(spec.Selector.NonResourceURLs) > 0
@@ -278,6 +295,19 @@ func matchesVerbSelector(verbs, selectorVerbs []string, mode rbacgraph.MatchMode
 	}
 
 	return false
+}
+
+// intersectVerbs returns the subset of ruleVerbs that appear in selectorVerbs
+// (case-insensitive). Order follows ruleVerbs so output stays stable.
+func intersectVerbs(ruleVerbs, selectorVerbs []string) []string {
+	out := make([]string, 0, len(ruleVerbs))
+	for _, v := range ruleVerbs {
+		if containsCI(selectorVerbs, v) {
+			out = append(out, v)
+		}
+	}
+
+	return out
 }
 
 func containsCI(haystack []string, needle string) bool {
