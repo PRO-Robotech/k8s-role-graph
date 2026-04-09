@@ -21,6 +21,7 @@ func newEmptySnapshot() *Snapshot {
 		BindingsByRoleRef:     make(map[RoleRefKey][]*BindingRecord),
 		AggregatedRoleSources: make(map[RoleID][]RoleID),
 		PodsByServiceAccount:  make(map[ServiceAccountKey][]*PodRecord),
+		ServiceAccounts:       make(map[ServiceAccountKey]struct{}),
 		WorkloadsByUID:        make(map[types.UID]*WorkloadRecord),
 		RoleIDsByVerb:         make(map[string]map[RoleID]struct{}),
 		RoleIDsByResource:     make(map[string]map[RoleID]struct{}),
@@ -250,6 +251,12 @@ func indexClusterRoleBindings(next *Snapshot, clusterRoleBindings []*rbacv1.Clus
 	for _, binding := range clusterRoleBindings {
 		indexBindingRecord(next, binding.UID, KindClusterRoleBinding, "", binding.Name,
 			binding.RoleRef, binding.Subjects)
+	}
+}
+
+func indexServiceAccounts(next *Snapshot, serviceAccounts []*corev1.ServiceAccount) {
+	for _, sa := range serviceAccounts {
+		next.ServiceAccounts[serviceAccountKey(sa.Namespace, sa.Name)] = struct{}{}
 	}
 }
 

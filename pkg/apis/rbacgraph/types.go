@@ -130,6 +130,7 @@ type GraphNode struct {
 	WorkloadKind       string
 	Synthetic          bool
 	HiddenCount        int
+	Phantom            bool
 }
 
 type GraphEdge struct {

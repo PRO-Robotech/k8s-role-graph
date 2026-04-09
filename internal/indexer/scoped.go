@@ -22,6 +22,7 @@ func Scoped(s *Snapshot, scope Scope) *Snapshot {
 		BindingsByRoleRef:     make(map[RoleRefKey][]*BindingRecord, len(s.BindingsByRoleRef)),
 		AggregatedRoleSources: make(map[RoleID][]RoleID, len(s.AggregatedRoleSources)),
 		PodsByServiceAccount:  make(map[ServiceAccountKey][]*PodRecord, len(s.PodsByServiceAccount)),
+		ServiceAccounts:       s.ServiceAccounts,
 		WorkloadsByUID:        make(map[types.UID]*WorkloadRecord, len(s.WorkloadsByUID)),
 		RoleIDsByVerb:         make(map[string]map[RoleID]struct{}),
 		RoleIDsByResource:     make(map[string]map[RoleID]struct{}),

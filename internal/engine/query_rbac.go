@@ -5,9 +5,30 @@ import (
 	"sort"
 	"strings"
 
+	rbacv1 "k8s.io/api/rbac/v1"
+
 	"k8s-role-graph/internal/indexer"
 	api "k8s-role-graph/pkg/apis/rbacgraph"
 )
+
+// isPhantomSubject returns true if the subject is a ServiceAccount that is
+// referenced by a binding but does not actually exist in the cluster. Users
+// and Groups are never phantom because they come from authenticators and
+// never exist as etcd objects by design.
+func (qc *queryContext) isPhantomSubject(subject rbacv1.Subject) bool {
+	if !strings.EqualFold(subject.Kind, indexer.SubjectKindServiceAccount) {
+		return false
+	}
+	if qc.snapshot == nil || qc.snapshot.ServiceAccounts == nil {
+		return false
+	}
+	_, exists := qc.snapshot.ServiceAccounts[indexer.ServiceAccountKey{
+		Namespace: subject.Namespace,
+		Name:      subject.Name,
+	}]
+
+	return !exists
+}
 
 //nolint:gocognit,gocyclo // core graph-building loop with necessary branching
 func (qc *queryContext) buildRBACGraph(roleIDs []indexer.RoleID) {
@@ -96,12 +117,20 @@ func (qc *queryContext) buildRBACGraph(roleIDs []indexer.RoleID) {
 
 			for _, subject := range binding.Subjects {
 				subjectNodeIDValue := subjectNodeID(subject)
+				phantom := qc.isPhantomSubject(subject)
 				qc.addNodeIfMissing(api.GraphNode{
 					ID:        subjectNodeIDValue,
 					Type:      subjectType(subject.Kind),
 					Name:      subject.Name,
 					Namespace: subject.Namespace,
+					Phantom:   phantom,
 				})
+				if phantom {
+					qc.addWarning(fmt.Sprintf(
+						"ServiceAccount %s/%s referenced by %s/%s does not exist in the cluster",
+						subject.Namespace, subject.Name, binding.Kind, binding.Name,
+					))
+				}
 				qc.subjectSeen[subjectNodeIDValue] = struct{}{}
 				qc.trackServiceAccountSubject(subjectNodeIDValue, subject, binding.Namespace)
 

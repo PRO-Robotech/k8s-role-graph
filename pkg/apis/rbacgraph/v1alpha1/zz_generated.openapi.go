@@ -456,6 +456,12 @@ func schema_pkg_apis_rbacgraph_v1alpha1_GraphNode(ref common.ReferenceCallback) 
 							Format: "int32",
 						},
 					},
+					"phantom": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"boolean"},
+							Format: "",
+						},
+					},
 				},
 				Required: []string{"id", "type", "name"},
 			},

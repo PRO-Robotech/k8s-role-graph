@@ -140,6 +140,7 @@ type GraphNode struct {
 	WorkloadKind       string            `json:"workloadKind,omitempty"`
 	Synthetic          bool              `json:"synthetic,omitempty"`
 	HiddenCount        int               `json:"hiddenCount,omitempty"`
+	Phantom            bool              `json:"phantom,omitempty"`
 }
 
 type GraphEdge struct {
