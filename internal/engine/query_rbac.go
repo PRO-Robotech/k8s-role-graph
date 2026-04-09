@@ -118,11 +118,15 @@ func (qc *queryContext) buildRBACGraph(roleIDs []indexer.RoleID) {
 			for _, subject := range binding.Subjects {
 				subjectNodeIDValue := subjectNodeID(subject)
 				phantom := qc.isPhantomSubject(subject)
+				nodeNamespace := ""
+				if subjectType(subject.Kind) == api.GraphNodeTypeServiceAccount {
+					nodeNamespace = subject.Namespace
+				}
 				qc.addNodeIfMissing(api.GraphNode{
 					ID:        subjectNodeIDValue,
 					Type:      subjectType(subject.Kind),
 					Name:      subject.Name,
-					Namespace: subject.Namespace,
+					Namespace: nodeNamespace,
 					Phantom:   phantom,
 				})
 				if phantom {
