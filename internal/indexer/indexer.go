@@ -28,6 +28,7 @@ type Indexer struct {
 	roleBindingsInformer        cache.SharedIndexInformer
 	clusterRoleBindingsInformer cache.SharedIndexInformer
 	podsInformer                cache.SharedIndexInformer
+	serviceAccountsInformer     cache.SharedIndexInformer
 	deploymentsInformer         cache.SharedIndexInformer
 	replicaSetsInformer         cache.SharedIndexInformer
 	statefulSetsInformer        cache.SharedIndexInformer
@@ -40,6 +41,7 @@ type Indexer struct {
 	roleBindingsLister        rbaclisters.RoleBindingLister
 	clusterRoleBindingsLister rbaclisters.ClusterRoleBindingLister
 	podsLister                corelisters.PodLister
+	serviceAccountsLister     corelisters.ServiceAccountLister
 	deploymentsLister         appslisters.DeploymentLister
 	replicaSetsLister         appslisters.ReplicaSetLister
 	statefulSetsLister        appslisters.StatefulSetLister
@@ -63,6 +65,7 @@ func New(client kubernetes.Interface, resyncPeriod time.Duration) *Indexer {
 	roleBindings := factory.Rbac().V1().RoleBindings()
 	clusterRoleBindings := factory.Rbac().V1().ClusterRoleBindings()
 	pods := factory.Core().V1().Pods()
+	serviceAccounts := factory.Core().V1().ServiceAccounts()
 	deployments := factory.Apps().V1().Deployments()
 	replicaSets := factory.Apps().V1().ReplicaSets()
 	statefulSets := factory.Apps().V1().StatefulSets()
@@ -78,6 +81,7 @@ func New(client kubernetes.Interface, resyncPeriod time.Duration) *Indexer {
 		roleBindingsInformer:        roleBindings.Informer(),
 		clusterRoleBindingsInformer: clusterRoleBindings.Informer(),
 		podsInformer:                pods.Informer(),
+		serviceAccountsInformer:     serviceAccounts.Informer(),
 		deploymentsInformer:         deployments.Informer(),
 		replicaSetsInformer:         replicaSets.Informer(),
 		statefulSetsInformer:        statefulSets.Informer(),
@@ -89,6 +93,7 @@ func New(client kubernetes.Interface, resyncPeriod time.Duration) *Indexer {
 		roleBindingsLister:          roleBindings.Lister(),
 		clusterRoleBindingsLister:   clusterRoleBindings.Lister(),
 		podsLister:                  pods.Lister(),
+		serviceAccountsLister:       serviceAccounts.Lister(),
 		deploymentsLister:           deployments.Lister(),
 		replicaSetsLister:           replicaSets.Lister(),
 		statefulSetsLister:          statefulSets.Lister(),
@@ -108,6 +113,7 @@ func New(client kubernetes.Interface, resyncPeriod time.Duration) *Indexer {
 	i.roleBindingsInformer.AddEventHandler(handler)        //nolint:errcheck,gosec // informer is running
 	i.clusterRoleBindingsInformer.AddEventHandler(handler) //nolint:errcheck,gosec // informer is running
 	i.podsInformer.AddEventHandler(handler)                //nolint:errcheck,gosec // informer is running
+	i.serviceAccountsInformer.AddEventHandler(handler)     //nolint:errcheck,gosec // informer is running
 	i.deploymentsInformer.AddEventHandler(handler)         //nolint:errcheck,gosec // informer is running
 	i.replicaSetsInformer.AddEventHandler(handler)         //nolint:errcheck,gosec // informer is running
 	i.statefulSetsInformer.AddEventHandler(handler)        //nolint:errcheck,gosec // informer is running
@@ -130,6 +136,7 @@ func (i *Indexer) Start(ctx context.Context) error {
 		i.roleBindingsInformer.HasSynced,
 		i.clusterRoleBindingsInformer.HasSynced,
 		i.podsInformer.HasSynced,
+		i.serviceAccountsInformer.HasSynced,
 		i.deploymentsInformer.HasSynced,
 		i.replicaSetsInformer.HasSynced,
 		i.statefulSetsInformer.HasSynced,
@@ -177,6 +184,7 @@ func (i *Indexer) rebuild() {
 	roleBindings := listWithWarning(i.roleBindingsLister.List, "rolebindings", &next.Warnings)
 	clusterRoleBindings := listWithWarning(i.clusterRoleBindingsLister.List, "clusterrolebindings", &next.Warnings)
 	pods := listWithWarning(i.podsLister.List, "pods", &next.Warnings)
+	serviceAccounts := listWithWarning(i.serviceAccountsLister.List, "serviceaccounts", &next.Warnings)
 	deployments := listWithWarning(i.deploymentsLister.List, "deployments", &next.Warnings)
 	replicaSets := listWithWarning(i.replicaSetsLister.List, "replicasets", &next.Warnings)
 	statefulSets := listWithWarning(i.statefulSetsLister.List, "statefulsets", &next.Warnings)
@@ -190,6 +198,7 @@ func (i *Indexer) rebuild() {
 	indexRoleBindings(next, roleBindings)
 	indexClusterRoleBindings(next, clusterRoleBindings)
 
+	indexServiceAccounts(next, serviceAccounts)
 	indexPods(next, pods)
 	for _, deployment := range deployments {
 		indexWorkload(next, "apps/v1", "Deployment", deployment.ObjectMeta)

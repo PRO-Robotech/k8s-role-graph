@@ -377,6 +377,7 @@ func autoConvert_v1alpha1_GraphNode_To_rbacgraph_GraphNode(in *GraphNode, out *r
 	out.WorkloadKind = in.WorkloadKind
 	out.Synthetic = in.Synthetic
 	out.HiddenCount = in.HiddenCount
+	out.Phantom = in.Phantom
 	return nil
 }
 
@@ -399,6 +400,7 @@ func autoConvert_rbacgraph_GraphNode_To_v1alpha1_GraphNode(in *rbacgraph.GraphNo
 	out.WorkloadKind = in.WorkloadKind
 	out.Synthetic = in.Synthetic
 	out.HiddenCount = in.HiddenCount
+	out.Phantom = in.Phantom
 	return nil
 }
 

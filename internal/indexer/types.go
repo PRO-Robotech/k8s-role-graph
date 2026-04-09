@@ -98,6 +98,7 @@ type Snapshot struct {
 	BindingsByRoleRef     map[RoleRefKey][]*BindingRecord
 	AggregatedRoleSources map[RoleID][]RoleID
 	PodsByServiceAccount  map[ServiceAccountKey][]*PodRecord
+	ServiceAccounts       map[ServiceAccountKey]struct{}
 	WorkloadsByUID        map[types.UID]*WorkloadRecord
 	RoleIDsByVerb         map[string]map[RoleID]struct{}
 	RoleIDsByResource     map[string]map[RoleID]struct{}
